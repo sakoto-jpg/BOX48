@@ -64,11 +64,25 @@ def save_config(config: dict):
 
 @app.get("/api/history")
 def get_history():
-    """获取已下载的 BV 号历史记录"""
+    """获取历史记录及当前活跃的下载任务"""
     history_file = scanner.history_file
+    completed_lines = []
     if os.path.exists(history_file):
         with open(history_file, 'r') as f:
-            # 倒序排列，最新的在最上面
-            lines = [line.strip() for line in f.readlines() if line.strip()]
-            return {"history": lines[::-1]}
-    return {"history": []}
+            # 倒序排列
+            completed_lines = [line.strip() for line in f.readlines() if line.strip()][::-1]
+            
+    return {
+        "completed": completed_lines,
+        "active": scanner.active_tasks  # 将内存中的进度实时返回给前端
+    }
+
+@app.post("/api/download_specific")
+def download_specific_video(payload: dict, background_tasks: BackgroundTasks):
+    """处理前端传来的具体链接"""
+    url = payload.get("url")
+    if not url:
+        return {"message": "未提供有效链接"}
+    # 将下载任务放入后台队列，不阻塞网页响应
+    background_tasks.add_task(scanner.download_single, url)
+    return {"message": "指令已投递，系统正在后台解析下载"}

@@ -7,23 +7,15 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 平滑过渡动画 */
-        .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
-        .fade-enter-from, .fade-leave-to { opacity: 0; }
         .list-enter-active, .list-leave-active { transition: all 0.4s ease; }
         .list-enter-from, .list-leave-to { opacity: 0; transform: translateY(15px); }
-        
-        /* 隐藏滚动条 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        /* 特别关注成员的流光动画 */
         .oshi-gradient {
             background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
         }
-
         @keyframes gradient {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -37,13 +29,10 @@
         <header class="flex justify-between items-end mb-8 pb-4 border-b border-slate-200">
             <div>
                 <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 tracking-tight">SNH48 Group</h1>
-                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v2.1</p>
+                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v2.2</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="relative flex h-3 w-3">
-                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                  <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
-                </span>
+                <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
                 <span class="text-sm font-semibold text-slate-600">服务运行中</span>
             </div>
         </header>
@@ -56,24 +45,61 @@
                         <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                         <h2 class="text-lg font-bold text-slate-800">任务引擎</h2>
                     </div>
-                    <button @click="triggerScan" :disabled="isScanning" class="w-full relative group overflow-hidden bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
-                        <span class="relative z-10">{{ isScanning ? '指令已发送...' : '立即扫描 B 站更新' }}</span>
+                    
+                    <button @click="triggerScan" :disabled="isScanning" class="w-full relative bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
+                        <span class="relative z-10">{{ isScanning ? '巡视指令已发送...' : '立即扫描 B 站更新' }}</span>
                     </button>
-                    <p class="text-xs text-slate-400 mt-3 text-center">{{ scanMessage }}</p>
+                    <p class="text-xs text-slate-400 mt-3 mb-6 text-center">{{ scanMessage }}</p>
+
+                    <div class="pt-5 border-t border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1">
+                            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            精准补档 (补历史公演)
+                        </h3>
+                        <div class="flex flex-col gap-2">
+                            <input v-model="manualUrl" placeholder="粘贴 B 站视频链接或 BV 号..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 outline-none transition font-mono">
+                            <button @click="triggerManualDownload" :disabled="!manualUrl || isManualDownloading" class="w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-semibold py-2.5 px-4 rounded-lg transition-all text-sm flex justify-center items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                {{ isManualDownloading ? '任务投递中...' : '解析并下载此场公演' }}
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[500px]">
-                    <div class="flex justify-between items-center mb-4">
-                        <div class="flex items-center gap-2">
-                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                            <h2 class="text-lg font-bold text-slate-800">入库历史</h2>
-                        </div>
-                        <button @click="fetchHistory" class="text-blue-500 hover:text-blue-700 hover:bg-blue-50 p-1.5 rounded-lg transition">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                        </button>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[600px]">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">监控中心</h2>
                     </div>
+                    
                     <div class="overflow-y-auto no-scrollbar flex-1 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                        <div v-if="history.length === 0" class="h-full flex items-center justify-center text-slate-400 text-sm">暂无下载记录</div>
+                        
+                        <div v-if="Object.keys(activeTasks).length > 0" class="mb-5 space-y-3">
+                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> 正在处理
+                            </h4>
+                            <div v-for="(task, bvid) in activeTasks" :key="'active'+bvid" class="bg-white border border-blue-200 p-3 rounded-lg shadow-sm relative overflow-hidden">
+                                <div class="absolute top-0 left-0 h-1 bg-slate-100 w-full">
+                                    <div class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-[1500ms] ease-out" 
+                                         :style="{ width: (parseFloat(task.progress) || 0) + '%' }"></div>
+                                </div>
+                                <div class="flex justify-between items-start mt-2">
+                                    <div class="w-3/4">
+                                        <p class="text-sm font-bold text-slate-800 line-clamp-1" :title="task.title">{{ task.title }}</p>
+                                        <p class="text-xs mt-1 font-medium" :class="task.status.includes('失败') ? 'text-red-500' : 'text-blue-500'">
+                                            {{ task.status }} <span v-if="task.p_total && task.p_total !== '?'">({{ task.p_current }}/{{ task.p_total }} P)</span>
+                                        </p>
+                                    </div>
+                                    <span class="text-sm font-mono font-extrabold" :class="task.status.includes('失败') ? 'text-red-500' : 'text-indigo-600'">
+                                        {{ task.progress }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h4 v-if="history.length > 0" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">已入库</h4>
+                        <div v-if="history.length === 0 && Object.keys(activeTasks).length === 0" class="h-full flex items-center justify-center text-slate-400 text-sm">暂无记录</div>
+                        
                         <TransitionGroup name="list" tag="ul" class="space-y-2">
                             <li v-for="bvid in history" :key="bvid" class="bg-white border border-slate-100 p-3 rounded-lg flex items-center justify-between hover:shadow-md transition-shadow group">
                                 <span class="font-mono text-sm text-slate-600 font-medium">{{ bvid }}</span>
@@ -85,7 +111,6 @@
             </div>
 
             <div class="xl:col-span-8 space-y-6">
-                
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex justify-between items-center sticky top-4 z-20">
                     <div>
                         <h2 class="text-lg font-bold text-slate-800">数据中心</h2>
@@ -102,21 +127,16 @@
                         <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                         <h3 class="text-lg font-bold text-slate-800">监听账号 (B站主页)</h3>
                     </div>
-                    
                     <div class="space-y-3">
                         <TransitionGroup name="list">
                             <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
                                 <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                 <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
-                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                </button>
+                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                             </div>
                         </TransitionGroup>
                     </div>
-                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号
-                    </button>
+                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
@@ -125,17 +145,13 @@
                             <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
                             <h3 class="text-lg font-bold text-slate-800">队伍编排与花名册</h3>
                         </div>
-                        <button @click="addTeam" class="text-sm bg-pink-50 text-pink-600 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition flex items-center gap-1">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 新增队伍
-                        </button>
+                        <button @click="addTeam" class="text-sm bg-pink-50 text-pink-600 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 新增队伍</button>
                     </div>
 
                     <div class="space-y-6">
                         <TransitionGroup name="list">
                             <div v-for="(team, tIndex) in config.teams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
-                                
                                 <div class="absolute left-0 top-0 bottom-0 w-1" :class="team.enabled ? 'bg-pink-400' : 'bg-slate-300'"></div>
-
                                 <div class="flex justify-between items-start mb-4 pl-2">
                                     <div class="flex items-center gap-4 w-full max-w-xl">
                                         <label class="relative inline-flex items-center cursor-pointer">
@@ -144,23 +160,18 @@
                                         </label>
                                         <input v-model="team.name" placeholder="队伍名称" class="font-bold text-lg bg-transparent border-b border-dashed border-slate-300 focus:border-pink-500 focus:outline-none w-48 py-1">
                                     </div>
-                                    <button @click="removeTeam(tIndex)" class="text-slate-400 hover:text-red-500 transition">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                                    </button>
+                                    <button @click="removeTeam(tIndex)" class="text-slate-400 hover:text-red-500 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                                 </div>
-
                                 <div class="pl-2 space-y-4">
                                     <div>
                                         <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">标题匹配关键词 (回车添加)</p>
                                         <div class="flex flex-wrap gap-2 items-center">
                                             <span v-for="(kw, kIndex) in team.keywords" :key="'kw'+kIndex" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-slate-100 text-slate-700">
-                                                {{ kw }}
-                                                <button @click="team.keywords.splice(kIndex, 1)" class="text-slate-400 hover:text-slate-600">&times;</button>
+                                                {{ kw }} <button @click="team.keywords.splice(kIndex, 1)" class="text-slate-400 hover:text-slate-600">&times;</button>
                                             </span>
                                             <input @keydown.enter.prevent="addKeyword(team, $event)" placeholder="添加关键词..." class="text-xs bg-slate-50 border border-slate-200 rounded-md px-2 py-1 w-28 focus:outline-none focus:border-slate-400 focus:bg-white transition">
                                         </div>
                                     </div>
-
                                     <div>
                                         <div class="flex justify-between items-end mb-2">
                                             <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">现役成员注入名单 (回车添加)</p>
@@ -171,44 +182,44 @@
                                                   @dblclick="toggleOshi(team, member)"
                                                   class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border shadow-sm cursor-pointer select-none transition-all duration-300 transform active:scale-95"
                                                   :class="team.oshis && team.oshis.includes(member) ? 'oshi-gradient text-white border-transparent shadow-pink-200' : 'bg-pink-50 text-pink-700 border-pink-100 hover:bg-pink-100'">
-                                                <span v-if="team.oshis && team.oshis.includes(member)">👑</span>
-                                                {{ member }}
-                                                <button @click.stop="team.members.splice(mIndex, 1)" 
-                                                        class="w-4 h-4 rounded-full inline-flex items-center justify-center transition leading-none pb-[2px]" 
-                                                        :class="team.oshis && team.oshis.includes(member) ? 'hover:bg-white/30' : 'hover:bg-pink-200'">&times;</button>
+                                                <span v-if="team.oshis && team.oshis.includes(member)">👑</span> {{ member }}
+                                                <button @click.stop="team.members.splice(mIndex, 1)" class="w-4 h-4 rounded-full inline-flex items-center justify-center transition leading-none pb-[2px]" :class="team.oshis && team.oshis.includes(member) ? 'hover:bg-white/30' : 'hover:bg-pink-200'">&times;</button>
                                             </span>
                                             <input @keydown.enter.prevent="addMember(team, $event)" placeholder="名字..." class="text-sm bg-white border border-slate-200 rounded-full px-3 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-pink-300 transition shadow-sm">
                                         </div>
                                     </div>
                                 </div>
-
                             </div>
                         </TransitionGroup>
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
 
     <script>
-        const { createApp, ref, onMounted } = Vue;
+        const { createApp, ref, onMounted, onUnmounted } = Vue;
 
         createApp({
             setup() {
                 const API_BASE = "http://192.168.1.12:8095/api";
                 
                 const history = ref([]);
+                const activeTasks = ref({});
                 const config = ref({ subscriptions: [], teams: [] });
                 const scanMessage = ref("自动调度：每日 13:00 / 23:00");
                 const isScanning = ref(false);
+                const manualUrl = ref("");
+                const isManualDownloading = ref(false);
+                let pollInterval = null;
 
                 const fetchHistory = async () => {
                     try {
                         const res = await fetch(`${API_BASE}/history`);
                         const data = await res.json();
-                        history.value = data.history;
-                    } catch (e) { console.error(e); }
+                        history.value = data.completed;
+                        activeTasks.value = data.active || {};
+                    } catch (e) { /* ignore polling errors */ }
                 };
 
                 const fetchConfig = async () => {
@@ -241,6 +252,25 @@
                     }
                 };
 
+                const triggerManualDownload = async () => {
+                    if (!manualUrl.value) return;
+                    try {
+                        isManualDownloading.value = true;
+                        const res = await fetch(`${API_BASE}/download_specific`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: manualUrl.value })
+                        });
+                        const data = await res.json();
+                        alert('✅ ' + data.message);
+                        manualUrl.value = ""; 
+                    } catch (e) {
+                        alert('❌ 请求失败，请检查后端状态');
+                    } finally {
+                        isManualDownloading.value = false;
+                    }
+                };
+
                 const saveConfig = async () => {
                     try {
                         const res = await fetch(`${API_BASE}/config`, {
@@ -250,32 +280,13 @@
                         });
                         const data = await res.json();
                         alert('✅ ' + data.message);
-                    } catch (e) {
-                        alert('❌ 保存失败');
-                    }
+                    } catch (e) { alert('❌ 保存失败'); }
                 };
 
-                const addSub = () => {
-                    config.value.subscriptions.push({ name: '', url: 'https://space.bilibili.com/...' });
-                };
-                
-                const removeSub = (idx) => {
-                    if(confirm('移除该订阅源？')) config.value.subscriptions.splice(idx, 1);
-                };
-
-                const addTeam = () => {
-                    config.value.teams.push({ 
-                        name: '新队伍', 
-                        enabled: true, 
-                        keywords: [], 
-                        members: [],
-                        oshis: []
-                    });
-                };
-
-                const removeTeam = (idx) => {
-                    if(confirm('删除队伍？')) config.value.teams.splice(idx, 1);
-                };
+                const addSub = () => config.value.subscriptions.push({ name: '', url: 'https://space.bilibili.com/...' });
+                const removeSub = (idx) => { if(confirm('移除该订阅源？')) config.value.subscriptions.splice(idx, 1); };
+                const addTeam = () => config.value.teams.push({ name: '新队伍', enabled: true, keywords: [], members: [], oshis: [] });
+                const removeTeam = (idx) => { if(confirm('删除队伍？')) config.value.teams.splice(idx, 1); };
 
                 const addKeyword = (team, event) => {
                     const val = event.target.value.trim();
@@ -292,23 +303,26 @@
                 const toggleOshi = (team, member) => {
                     if (!team.oshis) team.oshis = [];
                     const idx = team.oshis.indexOf(member);
-                    if (idx > -1) {
-                        team.oshis.splice(idx, 1);
-                    } else {
-                        team.oshis.push(member);
-                    }
+                    if (idx > -1) team.oshis.splice(idx, 1);
+                    else team.oshis.push(member);
                 };
 
                 onMounted(() => {
                     fetchHistory();
                     fetchConfig();
+                    // 开启轮询，每 1.5 秒抓取一次后端状态，实现实时进度条
+                    pollInterval = setInterval(fetchHistory, 1500);
+                });
+
+                onUnmounted(() => {
+                    if(pollInterval) clearInterval(pollInterval);
                 });
 
                 return { 
-                    history, config, scanMessage, isScanning,
-                    fetchHistory, triggerScan, saveConfig,
+                    history, activeTasks, config, scanMessage, isScanning, manualUrl, isManualDownloading,
+                    fetchHistory, triggerScan, triggerManualDownload, saveConfig,
                     addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi
-                }
+                };
             }
         }).mount('#app')
     </script>

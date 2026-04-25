@@ -10,12 +10,12 @@ services:
     volumes:
       - ./backend/app:/app
       - ./config:/config
-      - ./cookie:/cookie:ro
+      - ./cookie:/cookie
       - /mnt/nas/anime/video/live48:/downloads
     environment:
       - TZ=Asia/Shanghai
       - CONFIG_PATH=/config/roster.yaml
-      - COOKIE_PATH=/cookie/cookie.txt
+      - COOKIE_PATH=/cookie/cookies.txt
       - DOWNLOAD_PATH=/downloads
 
   # ---------- 新增前端服务 ----------
