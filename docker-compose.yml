@@ -1,0 +1,29 @@
+services:
+  snh48-backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: snh48-downloader-backend
+    restart: unless-stopped
+    ports:
+      - "8095:8000"
+    volumes:
+      - ./backend/app:/app
+      - ./config:/config
+      - ./cookie:/cookie:ro
+      - /mnt/nas/anime/video/live48:/downloads
+    environment:
+      - TZ=Asia/Shanghai
+      - CONFIG_PATH=/config/roster.yaml
+      - COOKIE_PATH=/cookie/cookie.txt
+      - DOWNLOAD_PATH=/downloads
+
+  # ---------- 新增前端服务 ----------
+  snh48-frontend:
+    image: nginx:alpine
+    container_name: snh48-downloader-frontend
+    restart: unless-stopped
+    ports:
+      - "8090:80"   # 使用 8090 端口访问网页端面板
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro  # 挂载前端代码目录

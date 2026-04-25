@@ -1,0 +1,11 @@
+# 忽略敏感信息和配置数据
+cookie/
+config/
+.env
+
+# 忽略下载的视频实体文件
+downloads/
+
+# 忽略 Python 缓存
+__pycache__/
+*.pyc

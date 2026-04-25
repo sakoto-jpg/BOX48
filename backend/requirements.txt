@@ -1,0 +1,5 @@
+fastapi==0.110.1
+uvicorn==0.29.0
+APScheduler==3.10.4
+PyYAML==6.0.1
+lxml==5.1.0        # 用于更稳定地处理 NFO 的 XML 生成
