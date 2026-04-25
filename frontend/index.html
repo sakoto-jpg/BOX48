@@ -7,14 +7,28 @@
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 自定义一些平滑过渡的动画 */
+        /* 平滑过渡动画 */
         .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
         .fade-enter-from, .fade-leave-to { opacity: 0; }
         .list-enter-active, .list-leave-active { transition: all 0.4s ease; }
         .list-enter-from, .list-leave-to { opacity: 0; transform: translateY(15px); }
-        /* 隐藏滚动条但保留滚动功能 */
+        
+        /* 隐藏滚动条 */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 特别关注成员的流光动画 */
+        .oshi-gradient {
+            background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans selection:bg-pink-200">
@@ -23,7 +37,7 @@
         <header class="flex justify-between items-end mb-8 pb-4 border-b border-slate-200">
             <div>
                 <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 tracking-tight">SNH48 Group</h1>
-                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v2.0</p>
+                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v2.1</p>
             </div>
             <div class="flex items-center gap-3">
                 <span class="relative flex h-3 w-3">
@@ -92,7 +106,7 @@
                     <div class="space-y-3">
                         <TransitionGroup name="list">
                             <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                <input v-model="sub.name" placeholder="标识名 (如: SNH48官方)" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
                                 <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
                                 <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -128,7 +142,7 @@
                                             <input type="checkbox" v-model="team.enabled" class="sr-only peer">
                                             <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
                                         </label>
-                                        <input v-model="team.name" placeholder="队伍名称 (如: TEAM NII)" class="font-bold text-lg bg-transparent border-b border-dashed border-slate-300 focus:border-pink-500 focus:outline-none w-48 py-1">
+                                        <input v-model="team.name" placeholder="队伍名称" class="font-bold text-lg bg-transparent border-b border-dashed border-slate-300 focus:border-pink-500 focus:outline-none w-48 py-1">
                                     </div>
                                     <button @click="removeTeam(tIndex)" class="text-slate-400 hover:text-red-500 transition">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
@@ -148,13 +162,22 @@
                                     </div>
 
                                     <div>
-                                        <p class="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">现役成员注入名单 (回车添加)</p>
+                                        <div class="flex justify-between items-end mb-2">
+                                            <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">现役成员注入名单 (回车添加)</p>
+                                            <p class="text-[10px] text-pink-400 font-medium italic">💡 双击成员名字设为特别关注 (👑)</p>
+                                        </div>
                                         <div class="flex flex-wrap gap-2 items-center">
-                                            <span v-for="(member, mIndex) in team.members" :key="'m'+mIndex" class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-pink-50 text-pink-700 border border-pink-100 shadow-sm">
+                                            <span v-for="(member, mIndex) in team.members" :key="'m'+mIndex" 
+                                                  @dblclick="toggleOshi(team, member)"
+                                                  class="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium border shadow-sm cursor-pointer select-none transition-all duration-300 transform active:scale-95"
+                                                  :class="team.oshis && team.oshis.includes(member) ? 'oshi-gradient text-white border-transparent shadow-pink-200' : 'bg-pink-50 text-pink-700 border-pink-100 hover:bg-pink-100'">
+                                                <span v-if="team.oshis && team.oshis.includes(member)">👑</span>
                                                 {{ member }}
-                                                <button @click="team.members.splice(mIndex, 1)" class="w-4 h-4 rounded-full hover:bg-pink-200 inline-flex items-center justify-center transition leading-none pb-[2px]">&times;</button>
+                                                <button @click.stop="team.members.splice(mIndex, 1)" 
+                                                        class="w-4 h-4 rounded-full inline-flex items-center justify-center transition leading-none pb-[2px]" 
+                                                        :class="team.oshis && team.oshis.includes(member) ? 'hover:bg-white/30' : 'hover:bg-pink-200'">&times;</button>
                                             </span>
-                                            <input @keydown.enter.prevent="addMember(team, $event)" placeholder="小偶像名字..." class="text-sm bg-white border border-slate-200 rounded-full px-3 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-pink-300 transition shadow-sm">
+                                            <input @keydown.enter.prevent="addMember(team, $event)" placeholder="名字..." class="text-sm bg-white border border-slate-200 rounded-full px-3 py-1 w-32 focus:outline-none focus:ring-2 focus:ring-pink-300 transition shadow-sm">
                                         </div>
                                     </div>
                                 </div>
@@ -176,12 +199,10 @@
                 const API_BASE = "http://192.168.1.12:8095/api";
                 
                 const history = ref([]);
-                // 初始化一个空配置对象
                 const config = ref({ subscriptions: [], teams: [] });
                 const scanMessage = ref("自动调度：每日 13:00 / 23:00");
                 const isScanning = ref(false);
 
-                // API：获取历史记录
                 const fetchHistory = async () => {
                     try {
                         const res = await fetch(`${API_BASE}/history`);
@@ -190,90 +211,92 @@
                     } catch (e) { console.error(e); }
                 };
 
-                // API：获取配置
                 const fetchConfig = async () => {
                     try {
                         const res = await fetch(`${API_BASE}/config`);
                         const data = await res.json();
-                        // 确保数据结构完整
                         if (!data.subscriptions) data.subscriptions = [];
                         if (!data.teams) data.teams = [];
-                        // 确保每个队伍都有基础字段
                         data.teams.forEach(t => {
                             if (!t.keywords) t.keywords = [];
                             if (!t.members) t.members = [];
+                            if (!t.oshis) t.oshis = [];
                         });
                         config.value = data;
                     } catch (e) { console.error(e); }
                 };
 
-                // API：手动触发扫描
                 const triggerScan = async () => {
                     if(isScanning.value) return;
                     try {
                         isScanning.value = true;
-                        scanMessage.value = "已向服务器下达指令...";
+                        scanMessage.value = "指令发送中...";
                         const res = await fetch(`${API_BASE}/trigger_scan`, { method: 'POST' });
                         const data = await res.json();
                         scanMessage.value = data.message;
                         setTimeout(() => { isScanning.value = false; }, 3000);
                     } catch (e) {
-                        scanMessage.value = "网络请求失败，请检查服务状态";
+                        scanMessage.value = "请求失败";
                         isScanning.value = false;
                     }
                 };
 
-                // API：保存配置
                 const saveConfig = async () => {
                     try {
                         const res = await fetch(`${API_BASE}/config`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            // Vue 的 ref 在被 JSON.stringify 时会自动提取内部 proxy 的真实数据
                             body: JSON.stringify(config.value)
                         });
                         const data = await res.json();
-                        // 简单的视觉反馈
                         alert('✅ ' + data.message);
                     } catch (e) {
-                        alert('❌ 保存失败: ' + e.message);
+                        alert('❌ 保存失败');
                     }
                 };
 
-                // ---- UI 交互逻辑 ----
-                
                 const addSub = () => {
                     config.value.subscriptions.push({ name: '', url: 'https://space.bilibili.com/...' });
                 };
                 
                 const removeSub = (idx) => {
-                    if(confirm('确定移除该订阅源吗？')) config.value.subscriptions.splice(idx, 1);
+                    if(confirm('移除该订阅源？')) config.value.subscriptions.splice(idx, 1);
                 };
 
                 const addTeam = () => {
                     config.value.teams.push({ 
                         name: '新队伍', 
                         enabled: true, 
-                        keywords: ['新队伍关键词'], 
-                        members: [] 
+                        keywords: [], 
+                        members: [],
+                        oshis: []
                     });
                 };
 
                 const removeTeam = (idx) => {
-                    if(confirm('确定删除整个队伍配置吗？')) config.value.teams.splice(idx, 1);
+                    if(confirm('删除队伍？')) config.value.teams.splice(idx, 1);
                 };
 
-                // 标签(Chip) 的输入逻辑
                 const addKeyword = (team, event) => {
                     const val = event.target.value.trim();
                     if (val && !team.keywords.includes(val)) team.keywords.push(val);
-                    event.target.value = ''; // 清空输入框
+                    event.target.value = '';
                 };
 
                 const addMember = (team, event) => {
                     const val = event.target.value.trim();
                     if (val && !team.members.includes(val)) team.members.push(val);
-                    event.target.value = ''; // 清空输入框
+                    event.target.value = '';
+                };
+
+                const toggleOshi = (team, member) => {
+                    if (!team.oshis) team.oshis = [];
+                    const idx = team.oshis.indexOf(member);
+                    if (idx > -1) {
+                        team.oshis.splice(idx, 1);
+                    } else {
+                        team.oshis.push(member);
+                    }
                 };
 
                 onMounted(() => {
@@ -284,7 +307,7 @@
                 return { 
                     history, config, scanMessage, isScanning,
                     fetchHistory, triggerScan, saveConfig,
-                    addSub, removeSub, addTeam, removeTeam, addKeyword, addMember
+                    addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi
                 }
             }
         }).mount('#app')
