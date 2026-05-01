@@ -62,19 +62,23 @@ def save_config(config: dict):
     scanner.nfo_builder.roster = scanner.nfo_builder._load_roster(CONFIG_PATH)
     return {"message": "配置已保存并生效"}
 
+# 找到 get_history 接口并替换：
 @app.get("/api/history")
 def get_history():
-    """获取历史记录及当前活跃的下载任务"""
     history_file = scanner.history_file
-    completed_lines = []
+    completed = []
     if os.path.exists(history_file):
-        with open(history_file, 'r') as f:
-            # 倒序排列
-            completed_lines = [line.strip() for line in f.readlines() if line.strip()][::-1]
-            
+        with open(history_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            for line in lines:
+                if '|' in line:
+                    bvid, title = line.strip().split('|', 1)
+                    completed.append({"id": bvid, "title": title})
+                else:
+                    completed.append({"id": line.strip(), "title": "历史导入数据"})
     return {
-        "completed": completed_lines,
-        "active": scanner.active_tasks  # 将内存中的进度实时返回给前端
+        "completed": completed[::-1],
+        "active": scanner.active_tasks 
     }
 
 @app.post("/api/download_specific")
