@@ -55,12 +55,27 @@ class Snh48Scanner:
                     self.active_tasks[bvid]['status'] = "正在合并文件..."
         return hook
 
-# ... 前面代码保持不变 ...
+# ... 保持其他方法不变 ...
 
     def _process_video_info(self, bvid: str, title: str, video_info: dict, target_team: str, date_str: str, year: str, formatted_date: str):
         parts = video_info.get('entries') if 'entries' in video_info else [video_info]
         if bvid in self.active_tasks:
             self.active_tasks[bvid]['p_total'] = len(parts)
+
+        # 🚀 提取整场公演的总简介
+        overall_plot = video_info.get('description') or ''
+        if not overall_plot and parts:
+            overall_plot = parts[0].get('description') or ''
+
+        # 🚀 核心改动：在循环外只调用一次，生成唯一的一个 NFO
+        # 返回的 base_episode_path 类似于: /downloads/TEAM NII/Season 2026/2026-04-24 标题/S2026E0424 - 标题
+        base_episode_path = self.nfo_builder.build_metadata(
+            team_name=target_team, 
+            year=year, 
+            date_str=formatted_date,
+            perf_title=title, 
+            plot=overall_plot
+        )
 
         success_count = 0
         for index, part in enumerate(parts):
@@ -68,16 +83,9 @@ class Snh48Scanner:
             if bvid in self.active_tasks:
                 self.active_tasks[bvid]['p_current'] = p_number
 
-            part_title = part.get('title') or f"P{p_number}"
-            plot = part.get('description') or '' 
-
-            output_path = self.nfo_builder.build_metadata(
-                team_name=target_team, year=year, date_str=formatted_date,
-                p_number=str(p_number), part_title=part_title, plot=plot,
-                perf_title=title
-            )
+            # 🚀 核心改动：利用 Emby 的多分段命名规则，在原文件名后附加 - ptX 标识
+            output_path = f"{base_episode_path} - pt{p_number}"
             
-            # 🚀 净化：只传最基础的参数，不再传递 audio_offset
             success = self.downloader.download_part(
                 bvid, p_number, output_path, 
                 progress_callback=self._create_hook(bvid)
@@ -93,7 +101,7 @@ class Snh48Scanner:
             if bvid in self.active_tasks:
                 self.active_tasks[bvid]['status'] = "下载失败"
 
-# ... 后面代码保持不变 ...
+# ... 保持其他方法不变 ...
 
     def scan_and_download(self, space_url=""):
         if "/video" not in space_url:

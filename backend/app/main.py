@@ -26,7 +26,7 @@ scheduler = BackgroundScheduler()
 @app.on_event("startup")
 def start_scheduler():
     # 改为调用 scanner.scan_all
-    scheduler.add_job(scanner.scan_all, 'cron', hour='13,23')
+    scheduler.add_job(scanner.scan_all, 'cron', hour='0,12')
     scheduler.start()
     print("✅ 定时任务已启动")
 
