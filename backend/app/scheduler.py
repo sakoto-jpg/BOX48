@@ -1,6 +1,7 @@
 import os
 import time
 import re
+import shutil
 import yt_dlp
 import yaml
 import traceback
@@ -74,6 +75,9 @@ class Snh48Scanner:
             perf_title=title, 
             plot=overall_plot
         )
+        
+        # 🚀 获取这场公演的独立文件夹路径（用于失败回滚）
+        perf_dir = os.path.dirname(base_episode_path)
 
         success_count = 0
         for index, part in enumerate(parts):
@@ -87,10 +91,16 @@ class Snh48Scanner:
                 bvid, p_number, output_path, 
                 progress_callback=self._create_hook(bvid)
             )
+            
             if success:
                 success_count += 1
+            else:
+                # 🚀 立即熔断机制：只要有一P死磕失败，后续的P直接放弃下载
+                print(f"❌ P{p_number} 死磕失败，触发数据完整性保护，中断后续分P下载...", flush=True)
+                break
 
-        if success_count > 0:
+        # 🚀 事务性入库校验：必须全部成功！
+        if success_count == len(parts):
             self._mark_downloaded(bvid, title)
             try:
                 import yaml, requests
@@ -104,8 +114,16 @@ class Snh48Scanner:
             if bvid in self.active_tasks:
                 del self.active_tasks[bvid]
         else:
+            # 🚀 触发物理回滚：无情删掉半残的文件夹和 NFO
+            print(f"🗑️ 触发物理回滚，清理不完整的公演数据目录: {perf_dir}", flush=True)
+            try:
+                if os.path.exists(perf_dir):
+                    shutil.rmtree(perf_dir) # 物理抹除该目录及下属所有文件
+            except Exception as e:
+                print(f"⚠️ 清理脏数据失败: {e}", flush=True)
+                
             if bvid in self.active_tasks:
-                self.active_tasks[bvid]['status'] = "下载失败"
+                self.active_tasks[bvid]['status'] = "残缺失败，已回滚清理"
 
     def scan_and_download(self, space_url=""):
         if "/video" not in space_url:
@@ -141,6 +159,7 @@ class Snh48Scanner:
             ydl_opts_full = {
                 'cookiefile': self.cookie_path, 
                 'quiet': True,
+                'extract_flat': True, # 🚀 浅层扫视：不再挨个访问分P网页，拿完总目录清单就跑！
                 'extractor_retries': 3,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -148,7 +167,7 @@ class Snh48Scanner:
                 }
             }
             
-            max_retries = 3
+            max_retries = 8
             for attempt in range(1, max_retries + 1):
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts_full) as ydl_full:
@@ -172,7 +191,8 @@ class Snh48Scanner:
                 except Exception as e:
                     print(f"⚠️ [自动扫描] 第 {attempt} 次解析失败 {bvid}: {e}", flush=True)
                     if attempt < max_retries:
-                        time.sleep(5)
+                        sleep_time = attempt * 10 
+                        time.sleep(sleep_time)
                     else:
                         print(f"❌ 解析详情彻底失败 {bvid}", flush=True)
 
@@ -186,6 +206,7 @@ class Snh48Scanner:
         ydl_opts_full = {
             'cookiefile': self.cookie_path, 
             'quiet': True,
+            'extract_flat': True, # 🚀 浅层扫视：拿完目录就撤退，降低前期报错率
             'extractor_retries': 3,
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -193,7 +214,7 @@ class Snh48Scanner:
             }
         }
         
-        max_retries = 3
+        max_retries = 8
         for attempt in range(1, max_retries + 1):
             try:
                 with yt_dlp.YoutubeDL(ydl_opts_full) as ydl_full:
@@ -211,14 +232,14 @@ class Snh48Scanner:
             except Exception as e:
                 print(f"⚠️ [手动下载] 第 {attempt} 次解析信息失败 {bvid}: {e}", flush=True)
                 if attempt < max_retries:
-                    self.active_tasks[bvid]['status'] = f"解析受阻，等待重试({attempt}/{max_retries})"
-                    time.sleep(5)
+                    sleep_time = attempt * 10
+                    self.active_tasks[bvid]['status'] = f"解析受阻，冷却{sleep_time}s({attempt}/{max_retries})"
+                    time.sleep(sleep_time)
                 else:
                     print(f"❌ 手动解析视频彻底崩溃 {bvid}: {e}", flush=True)
                     traceback.print_exc()
-                    self.active_tasks[bvid]['status'] = "解析失败"
+                    self.active_tasks[bvid]['status'] = "解析彻底失败"
 
-    # 🚀 这里是补回来的关键代码！
     def scan_all(self):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)

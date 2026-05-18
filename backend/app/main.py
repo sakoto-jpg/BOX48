@@ -32,7 +32,6 @@ def get_current_config():
     return {}
 
 def send_apprise_msg(title: str, body: str):
-    """向 Apprise API 发送推送请求"""
     config = get_current_config()
     apprise_url = config.get("apprise_url", "")
     if not apprise_url:
@@ -45,7 +44,6 @@ def send_apprise_msg(title: str, body: str):
         print(f"❌ Apprise 推送失败: {e}")
 
 def check_reminders():
-    """定时巡视排期日历，触发订阅提醒"""
     config = get_current_config()
     apprise_url = config.get("apprise_url", "")
     if not apprise_url: return
@@ -69,8 +67,8 @@ def check_reminders():
     for show in data:
         show_id = show.get("id")
         title = show.get("title")
-        date_str = show.get("date") # 例如 "5月24日"
-        time_str = show.get("show_time") # 例如 "18:30"
+        date_str = show.get("date") 
+        time_str = show.get("show_time") 
         
         try:
             month = int(date_str.split('月')[0])
@@ -78,12 +76,14 @@ def check_reminders():
             hour, minute = map(int, time_str.split(':'))
             show_dt = datetime.datetime(now.year, month, day, hour, minute)
             
-            # 跨年处理 (12月获取1月排期)
             if show_dt < now - datetime.timedelta(days=30):
                 show_dt = show_dt.replace(year=now.year + 1)
         except: continue
 
-        # 🎯 判定是否需要提醒：手动订阅了？ 或者 命中了开启了提醒的队伍关键词？
+        # 🚀 拦截 1：如果现在的时间已经超过了开演时间，说明公演已结束或正在进行，直接忽略！
+        if now >= show_dt:
+            continue
+
         should_notify = False
         if show_id in config.get("manual_subs", []):
             should_notify = True
@@ -91,7 +91,6 @@ def check_reminders():
             for team in config.get("teams", []):
                 if team.get("enabled") and team.get("notify", False):
                     for kw in team.get("keywords", []):
-                        # 清洗特征词，兼容 B站格式 和 票务日历格式
                         clean_kw = kw.replace("《", "").replace("》", "")
                         if clean_kw in title:
                             should_notify = True
@@ -100,18 +99,23 @@ def check_reminders():
                 
         if not should_notify: continue
 
-        # ⏳ 时间节点 1：前一天 22:00 规划日程提醒
+        # ⏳ 拦截 2：精确定义触发窗口，逾期作废
         day_before_22 = (show_dt - datetime.timedelta(days=1)).replace(hour=22, minute=0, second=0, microsecond=0)
-        # ⏳ 时间节点 2：开演前 30 分钟就绪提醒
-        min_30_before = show_dt - datetime.timedelta(minutes=30)
+        # 有效期：前一天 22:00 开始，到开演前 2 小时结束
+        is_valid_day_before = day_before_22 <= now < (show_dt - datetime.timedelta(hours=2))
         
-        # 触发判断
-        if now >= day_before_22 and f"{show_id}_daybefore" not in notified:
-            send_apprise_msg("🔔 明日公演提醒", f"【{title}】\n📅 时间：明天 {time_str}\n🔗 票务：{show.get('link')}")
+        min_30_before = show_dt - datetime.timedelta(minutes=30)
+        # 有效期：开场前 30 分钟开始，到开演结束
+        is_valid_30min = min_30_before <= now < show_dt
+        
+        if is_valid_day_before and f"{show_id}_daybefore" not in notified:
+            # 智能文案：如果是第二天早上才补发的提醒，自动把“明日”改成“今日”
+            day_prefix = "明日" if now.date() < show_dt.date() else "今日"
+            send_apprise_msg(f"🔔 {day_prefix}公演提醒", f"【{title}】\n📅 时间：{date_str} {time_str}\n🔗 票务：{show.get('link')}")
             notified.add(f"{show_id}_daybefore")
             new_notified.append(f"{show_id}_daybefore")
             
-        if now >= min_30_before and f"{show_id}_30min" not in notified:
+        if is_valid_30min and f"{show_id}_30min" not in notified:
             send_apprise_msg("🚨 演出即将开始！", f"【{title}】\n📅 时间：今天 {time_str} (30分钟后开场)\n🔗 票务：{show.get('link')}")
             notified.add(f"{show_id}_30min")
             new_notified.append(f"{show_id}_30min")
@@ -124,7 +128,6 @@ def check_reminders():
 @app.on_event("startup")
 def start_scheduler():
     scheduler.add_job(scanner.scan_all, 'cron', hour='13,23')
-    # 每 5 分钟巡视一次排期表，看有没有到达触发时间的公演
     scheduler.add_job(check_reminders, 'interval', minutes=5)
     scheduler.start()
     print("✅ 定时任务及通知引擎已启动")
