@@ -21,6 +21,8 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
 DOWNLOAD_PATH = os.environ.get("DOWNLOAD_PATH", "/downloads")
 NOTIFIED_FILE = "/config/notified.txt"
+# 🚀 新增：口袋48开播推送记录本，防止重复轰炸
+POCKET48_NOTIFIED_FILE = "/config/pocket48_notified.txt"
 
 scanner = Snh48Scanner(CONFIG_PATH, COOKIE_PATH, DOWNLOAD_PATH)
 scheduler = BackgroundScheduler()
@@ -125,12 +127,95 @@ def check_reminders():
             for n in new_notified:
                 f.write(f"{n}\n")
 
+# ... 原有的 check_reminders() 函数 ...
+
+def check_pocket48_live():
+    """定时巡视口袋48，监控特别关注（oshis）是否开播"""
+    config = get_current_config()
+    apprise_url = config.get("apprise_url", "")
+    if not apprise_url: return
+
+    # 1. 收集所有的 oshis (特别关注)
+    all_oshis = set()
+    for team in config.get("teams", []):
+        if team.get("enabled"):
+            for oshi in team.get("oshis", []):
+                all_oshis.add(oshi)
+                
+    if not all_oshis: return
+
+    # 2. 请求口袋48获取当前直播列表
+    url = "https://pocketapi.48.cn/live/api/v1/live/getLiveList"
+    headers = {
+        "Content-Type": "application/json;charset=utf-8",
+        # 伪装成口袋48官方 App 的 Header
+        "User-Agent": "PocketFans201807/6.0.0 (iPhone; iOS 14.4; Scale/3.00)",
+        "appInfo": '{"vendor":"apple","deviceId":"0","appVersion":"6.0.0","appBuild":"200513","osVersion":"14.4.0","osType":"ios","deviceName":"iphone","os":"ios"}',
+    }
+    payload = {
+        "debug": True,
+        "next": "0",
+        "groupId": 0,
+        "record": False
+    }
+
+    try:
+        res = requests.post(url, json=payload, headers=headers, timeout=10)
+        data = res.json()
+        live_list = data.get("content", {}).get("liveList", [])
+    except Exception as e:
+        print(f"⚠️ 口袋48接口请求失败: {e}")
+        return
+
+    # 3. 记录已推送过的直播间
+    if not os.path.exists(POCKET48_NOTIFIED_FILE):
+        open(POCKET48_NOTIFIED_FILE, 'w').close()
+    with open(POCKET48_NOTIFIED_FILE, 'r') as f:
+        notified = set(f.read().splitlines())
+
+    new_notified = []
+
+    for live in live_list:
+        live_id = str(live.get("liveId"))
+        title = live.get("title", "直播间")
+        
+        # 🚀 提取信息：同时拿到带前缀的昵称和纯净的艺名
+        user_info = live.get("userInfo", {})
+        nickname = user_info.get("nickname", "")
+        star_name = user_info.get("starName", "")
+        
+        # 口袋48类型：1是视频直播，2是电台直播
+        live_type = live.get("liveType", 1) 
+        type_str = "📺 视频直播" if live_type == 1 else "📻 电台语音"
+
+        # 🚀 核心修复：精准匹配 starName，或者模糊匹配 nickname
+        is_oshi = (star_name in all_oshis) or any(oshi in nickname for oshi in all_oshis)
+
+        # 如果匹配成功，且还没推送过
+        if is_oshi and live_id not in notified:
+            # 优先使用纯净的 star_name 进行推送展示
+            display_name = star_name if star_name else nickname
+            send_apprise_msg(
+                f"🌟 你的特别关注【{display_name}】开播啦！",
+                f"标题：{title}\n类型：{type_str}\n快去口袋48APP围观吧！"
+            )
+            notified.add(live_id)
+            new_notified.append(live_id)
+
+    # 保存新的推送记录
+    if new_notified:
+        with open(POCKET48_NOTIFIED_FILE, 'a') as f:
+            for n in new_notified:
+                f.write(f"{n}\n")
+
 @app.on_event("startup")
 def start_scheduler():
     scheduler.add_job(scanner.scan_all, 'cron', hour='13,23')
     scheduler.add_job(check_reminders, 'interval', minutes=5)
+    # 🚀 新增：每 5 分钟巡视一次口袋48，保证开播提醒足够及时
+    scheduler.add_job(check_pocket48_live, 'interval', minutes=5)
     scheduler.start()
-    print("✅ 定时任务及通知引擎已启动")
+    print("✅ 定时任务及通知引擎已启动(包含口袋48监控)")
 
 @app.on_event("shutdown")
 def stop_scheduler():
