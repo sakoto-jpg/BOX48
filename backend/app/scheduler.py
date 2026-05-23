@@ -107,7 +107,13 @@ class Snh48Scanner:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     apprise_url = (yaml.safe_load(f) or {}).get("apprise_url", "")
                 if apprise_url:
-                    requests.post(apprise_url, json={"title": "✅ 录播入库完成", "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！", "format": "text"}, timeout=5)
+                    # 🚀 格式化：去除旧的 format，转用标准 type: success
+                    payload = {
+                        "title": "[SNH48] 录播入库完成",
+                        "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
+                        "type": "success"
+                    }
+                    requests.post(apprise_url, json=payload, timeout=5)
             except Exception as e:
                 pass
             

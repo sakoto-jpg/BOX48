@@ -21,7 +21,6 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
 DOWNLOAD_PATH = os.environ.get("DOWNLOAD_PATH", "/downloads")
 NOTIFIED_FILE = "/config/notified.txt"
-# 🚀 新增：口袋48开播推送记录本，防止重复轰炸
 POCKET48_NOTIFIED_FILE = "/config/pocket48_notified.txt"
 
 scanner = Snh48Scanner(CONFIG_PATH, COOKIE_PATH, DOWNLOAD_PATH)
@@ -33,13 +32,18 @@ def get_current_config():
             return yaml.safe_load(f) or {}
     return {}
 
-def send_apprise_msg(title: str, body: str):
+# 🚀 改造推送引擎，支持 type 字段和全新的规范格式
+def send_apprise_msg(title: str, body: str, msg_type: str = "info"):
     config = get_current_config()
     apprise_url = config.get("apprise_url", "")
     if not apprise_url:
         return
     try:
-        payload = {"title": title, "body": body, "format": "text"}
+        payload = {
+            "title": title,
+            "body": body,
+            "type": msg_type
+        }
         requests.post(apprise_url, json=payload, timeout=5)
         print(f"📱 微信推送成功: {title}")
     except Exception as e:
@@ -82,7 +86,6 @@ def check_reminders():
                 show_dt = show_dt.replace(year=now.year + 1)
         except: continue
 
-        # 🚀 拦截 1：如果现在的时间已经超过了开演时间，说明公演已结束或正在进行，直接忽略！
         if now >= show_dt:
             continue
 
@@ -101,24 +104,30 @@ def check_reminders():
                 
         if not should_notify: continue
 
-        # ⏳ 拦截 2：精确定义触发窗口，逾期作废
         day_before_22 = (show_dt - datetime.timedelta(days=1)).replace(hour=22, minute=0, second=0, microsecond=0)
-        # 有效期：前一天 22:00 开始，到开演前 2 小时结束
         is_valid_day_before = day_before_22 <= now < (show_dt - datetime.timedelta(hours=2))
         
         min_30_before = show_dt - datetime.timedelta(minutes=30)
-        # 有效期：开场前 30 分钟开始，到开演结束
         is_valid_30min = min_30_before <= now < show_dt
         
         if is_valid_day_before and f"{show_id}_daybefore" not in notified:
-            # 智能文案：如果是第二天早上才补发的提醒，自动把“明日”改成“今日”
             day_prefix = "明日" if now.date() < show_dt.date() else "今日"
-            send_apprise_msg(f"🔔 {day_prefix}公演提醒", f"【{title}】\n📅 时间：{date_str} {time_str}\n🔗 票务：{show.get('link')}")
+            # 🚀 格式化：使用 info 类型发送日常提醒
+            send_apprise_msg(
+                title=f"[SNH48] {day_prefix}公演提醒", 
+                body=f"【{title}】\n📅 时间：{date_str} {time_str}\n🔗 票务：{show.get('link')}",
+                msg_type="info"
+            )
             notified.add(f"{show_id}_daybefore")
             new_notified.append(f"{show_id}_daybefore")
             
         if is_valid_30min and f"{show_id}_30min" not in notified:
-            send_apprise_msg("🚨 演出即将开始！", f"【{title}】\n📅 时间：今天 {time_str} (30分钟后开场)\n🔗 票务：{show.get('link')}")
+            # 🚀 格式化：即将开场，使用 warning 引起注意
+            send_apprise_msg(
+                title="[SNH48] 演出即将开始！", 
+                body=f"【{title}】\n📅 时间：今天 {time_str} (30分钟后开场)\n🔗 票务：{show.get('link')}",
+                msg_type="warning"
+            )
             notified.add(f"{show_id}_30min")
             new_notified.append(f"{show_id}_30min")
 
@@ -127,15 +136,11 @@ def check_reminders():
             for n in new_notified:
                 f.write(f"{n}\n")
 
-# ... 原有的 check_reminders() 函数 ...
-
 def check_pocket48_live():
-    """定时巡视口袋48，监控特别关注（oshis）是否开播"""
     config = get_current_config()
     apprise_url = config.get("apprise_url", "")
     if not apprise_url: return
 
-    # 1. 收集所有的 oshis (特别关注)
     all_oshis = set()
     for team in config.get("teams", []):
         if team.get("enabled"):
@@ -144,11 +149,9 @@ def check_pocket48_live():
                 
     if not all_oshis: return
 
-    # 2. 请求口袋48获取当前直播列表
     url = "https://pocketapi.48.cn/live/api/v1/live/getLiveList"
     headers = {
         "Content-Type": "application/json;charset=utf-8",
-        # 伪装成口袋48官方 App 的 Header
         "User-Agent": "PocketFans201807/6.0.0 (iPhone; iOS 14.4; Scale/3.00)",
         "appInfo": '{"vendor":"apple","deviceId":"0","appVersion":"6.0.0","appBuild":"200513","osVersion":"14.4.0","osType":"ios","deviceName":"iphone","os":"ios"}',
     }
@@ -167,7 +170,6 @@ def check_pocket48_live():
         print(f"⚠️ 口袋48接口请求失败: {e}")
         return
 
-    # 3. 记录已推送过的直播间
     if not os.path.exists(POCKET48_NOTIFIED_FILE):
         open(POCKET48_NOTIFIED_FILE, 'w').close()
     with open(POCKET48_NOTIFIED_FILE, 'r') as f:
@@ -179,30 +181,26 @@ def check_pocket48_live():
         live_id = str(live.get("liveId"))
         title = live.get("title", "直播间")
         
-        # 🚀 提取信息：同时拿到带前缀的昵称和纯净的艺名
         user_info = live.get("userInfo", {})
         nickname = user_info.get("nickname", "")
         star_name = user_info.get("starName", "")
         
-        # 口袋48类型：1是视频直播，2是电台直播
         live_type = live.get("liveType", 1) 
         type_str = "📺 视频直播" if live_type == 1 else "📻 电台语音"
 
-        # 🚀 核心修复：精准匹配 starName，或者模糊匹配 nickname
         is_oshi = (star_name in all_oshis) or any(oshi in nickname for oshi in all_oshis)
 
-        # 如果匹配成功，且还没推送过
         if is_oshi and live_id not in notified:
-            # 优先使用纯净的 star_name 进行推送展示
             display_name = star_name if star_name else nickname
+            # 🚀 格式化：使用 success 推送开播喜报
             send_apprise_msg(
-                f"🌟 你的特别关注【{display_name}】开播啦！",
-                f"标题：{title}\n类型：{type_str}\n快去口袋48APP围观吧！"
+                title=f"[SNH48] {display_name} 开播啦！",
+                body=f"标题：{title}\n类型：{type_str}\n快去口袋48APP围观吧！",
+                msg_type="success"
             )
             notified.add(live_id)
             new_notified.append(live_id)
 
-    # 保存新的推送记录
     if new_notified:
         with open(POCKET48_NOTIFIED_FILE, 'a') as f:
             for n in new_notified:
@@ -212,7 +210,6 @@ def check_pocket48_live():
 def start_scheduler():
     scheduler.add_job(scanner.scan_all, 'cron', hour='13,23')
     scheduler.add_job(check_reminders, 'interval', minutes=5)
-    # 🚀 新增：每 5 分钟巡视一次口袋48，保证开播提醒足够及时
     scheduler.add_job(check_pocket48_live, 'interval', minutes=5)
     scheduler.start()
     print("✅ 定时任务及通知引擎已启动(包含口袋48监控)")
