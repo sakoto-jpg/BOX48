@@ -109,7 +109,7 @@ class Snh48Scanner:
                 if apprise_url:
                     # 🚀 格式化：去除旧的 format，转用标准 type: success
                     payload = {
-                        "title": "[SNH48] 录播入库完成",
+                        "title": "[SNH48-DownLoader] 录播入库完成",
                         "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
                         "type": "success"
                     }

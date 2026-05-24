@@ -65,6 +65,69 @@
                     </div>
                 </div>
 
+                <!-- Auto Scanner 调度 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">自动扫描调度</h2>
+                    </div>
+
+                    <!-- 开关 -->
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm text-slate-600">启用自动扫描</span>
+                        <button @click="config.scheduler.enabled = !config.scheduler.enabled"
+                            :class="config.scheduler?.enabled ? 'bg-indigo-500' : 'bg-slate-300'"
+                            class="relative w-12 h-6 rounded-full transition-colors duration-300">
+                            <span :class="config.scheduler?.enabled ? 'translate-x-6' : 'translate-x-1'"
+                                class="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300"></span>
+                        </button>
+                    </div>
+
+                    <!-- 模式选择 -->
+                    <div v-if="config.scheduler?.enabled" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描模式</label>
+                        <div class="flex gap-2">
+                            <button @click="setSchedulerMode('cron')"
+                                :class="config.scheduler.mode === 'cron' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">每日定时</button>
+                            <button @click="setSchedulerMode('interval')"
+                                :class="config.scheduler.mode === 'interval' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">间隔轮询</button>
+                        </div>
+                    </div>
+
+                    <!-- Cron 模式：小时选择 -->
+                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'cron'" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">每日执行时间</label>
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            <span v-for="h in (config.scheduler.cron_hours || []).sort((a,b)=>a-b)"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md text-xs font-medium">
+                                {{ String(h).padStart(2,'0') }}:00
+                                <button @click="removeCronHour(h)" class="text-indigo-400 hover:text-red-500 transition">✕</button>
+                            </span>
+                        </div>
+                        <select v-if="availableHours.length > 0" @change="addCronHour(Number($event.target.value)); $event.target.value=''"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 outline-none focus:ring-2 focus:ring-indigo-400">
+                            <option value="" disabled selected>+ 添加时间</option>
+                            <option v-for="h in availableHours" :value="h">{{ String(h).padStart(2,'0') }}:00</option>
+                        </select>
+                    </div>
+
+                    <!-- Interval 模式：间隔小时 -->
+                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'interval'" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描间隔</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" v-model.number="config.scheduler.interval_hours"
+                                min="1" max="168"
+                                class="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-center outline-none focus:ring-2 focus:ring-indigo-400">
+                            <span class="text-sm text-slate-500">小时</span>
+                        </div>
+                    </div>
+
+                    <!-- 状态 -->
+                    <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
+                </div>
+
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -285,7 +348,7 @@
                 const history = ref([]);
                 const activeTasks = ref({});
                 const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [] });
-                const scanMessage = ref("自动调度：每日 13:00 / 23:00");
+                const scanMessage = ref("");
                 const isScanning = ref(false);
                 const manualUrl = ref("");
                 const isManualDownloading = ref(false);
@@ -299,6 +362,23 @@
 
                 const daysInMonth = computed(() => new Date(currentYear.value, currentMonth.value, 0).getDate());
                 const firstDayOffset = computed(() => new Date(currentYear.value, currentMonth.value - 1, 1).getDay());
+
+                const schedulerStatus = computed(() => {
+                    const s = config.value.scheduler;
+                    if (!s || s.enabled === false) return "自动扫描：已禁用";
+                    if (s.mode === "cron") {
+                        const hours = (s.cron_hours || [13, 23])
+                            .sort((a, b) => a - b)
+                            .map(h => `${String(h).padStart(2, '0')}:00`)
+                            .join(" / ");
+                        return `自动扫描：每日 ${hours}`;
+                    }
+                    return `自动扫描：每 ${s.interval_hours || 6} 小时`;
+                });
+                const availableHours = computed(() => {
+                    const selected = config.value.scheduler?.cron_hours || [];
+                    return Array.from({ length: 24 }, (_, i) => i).filter(h => !selected.includes(h));
+                });
 
                 const fetchHistory = async () => {
                     try {
@@ -323,7 +403,11 @@
                             if (!t.oshis) t.oshis = [];
                             if (t.notify === undefined) t.notify = false; // 默认不开启团队级提醒
                         });
+                        if (!data.scheduler) {
+                            data.scheduler = { enabled: true, mode: "cron", cron_hours: [13, 23], interval_hours: 6 };
+                        }
                         config.value = data;
+                        scanMessage.value = schedulerStatus.value;
                     } catch (e) { console.error(e); }
                 };
 
@@ -357,7 +441,10 @@
                         const res = await fetch(`${API_BASE}/trigger_scan`, { method: 'POST' });
                         const data = await res.json();
                         scanMessage.value = data.message;
-                        setTimeout(() => { isScanning.value = false; }, 3000);
+                        setTimeout(() => {
+                            isScanning.value = false;
+                            scanMessage.value = schedulerStatus.value;
+                        }, 3000);
                     } catch (e) {
                         scanMessage.value = "请求失败";
                         isScanning.value = false;
@@ -438,6 +525,22 @@
                     else team.oshis.push(member);
                 };
 
+                const setSchedulerMode = (mode) => {
+                    if (!config.value.scheduler) return;
+                    config.value.scheduler.mode = mode;
+                };
+                const addCronHour = (hour) => {
+                    const hours = config.value.scheduler?.cron_hours;
+                    if (!hours) return;
+                    if (!hours.includes(hour)) hours.push(hour);
+                };
+                const removeCronHour = (hour) => {
+                    const hours = config.value.scheduler?.cron_hours;
+                    if (!hours || hours.length <= 1) return;
+                    const idx = hours.indexOf(hour);
+                    if (idx > -1) hours.splice(idx, 1);
+                };
+
                 onMounted(() => {
                     fetchHistory();
                     fetchConfig();
@@ -449,11 +552,12 @@
                     if(pollInterval) clearInterval(pollInterval);
                 });
 
-                return { 
+                return {
                     history, activeTasks, config, scanMessage, isScanning, manualUrl, isManualDownloading,
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
                     fetchHistory, triggerScan, triggerManualDownload, saveConfig, toggleManualSub,
-                    addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi
+                    addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
+                    schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour
                 };
             }
         }).mount('#app')

@@ -49,6 +49,44 @@ def send_apprise_msg(title: str, body: str, msg_type: str = "info"):
     except Exception as e:
         print(f"❌ Apprise 推送失败: {e}")
 
+def reschedule_scan_job():
+    config = get_current_config()
+    sched_cfg = config.get("scheduler", {})
+    enabled = sched_cfg.get("enabled", True)
+    mode = sched_cfg.get("mode", "cron")
+
+    job = scheduler.get_job("scan_all")
+
+    if not enabled:
+        if job:
+            scheduler.pause_job("scan_all")
+            print("⏸️ 自动扫描调度已暂停")
+        return
+
+    if mode == "cron":
+        hours = sched_cfg.get("cron_hours", [13, 23])
+        if not hours:
+            hours = [13]
+        hour_str = ",".join(str(int(h)) for h in hours)
+        if job:
+            scheduler.reschedule_job("scan_all", trigger="cron", hour=hour_str)
+        else:
+            scheduler.add_job(scanner.scan_all, "cron", hour=hour_str, id="scan_all")
+    elif mode == "interval":
+        interval_h = max(1, int(sched_cfg.get("interval_hours", 6)))
+        if job:
+            scheduler.reschedule_job("scan_all", trigger="interval", hours=interval_h)
+        else:
+            scheduler.add_job(scanner.scan_all, "interval", hours=interval_h, id="scan_all")
+    else:
+        if job:
+            scheduler.reschedule_job("scan_all", trigger="cron", hour="13,23")
+        else:
+            scheduler.add_job(scanner.scan_all, "cron", hour="13,23", id="scan_all")
+
+    scheduler.resume_job("scan_all")
+    print(f"✅ 扫描调度已更新: mode={mode}")
+
 def check_reminders():
     config = get_current_config()
     apprise_url = config.get("apprise_url", "")
@@ -114,7 +152,7 @@ def check_reminders():
             day_prefix = "明日" if now.date() < show_dt.date() else "今日"
             # 🚀 格式化：使用 info 类型发送日常提醒
             send_apprise_msg(
-                title=f"[SNH48] {day_prefix}公演提醒", 
+                title=f"[SNH48-DownLoader] {day_prefix}公演提醒",
                 body=f"【{title}】\n📅 时间：{date_str} {time_str}\n🔗 票务：{show.get('link')}",
                 msg_type="info"
             )
@@ -124,7 +162,7 @@ def check_reminders():
         if is_valid_30min and f"{show_id}_30min" not in notified:
             # 🚀 格式化：即将开场，使用 warning 引起注意
             send_apprise_msg(
-                title="[SNH48] 演出即将开始！", 
+                title="[SNH48-DownLoader] 演出即将开始！",
                 body=f"【{title}】\n📅 时间：今天 {time_str} (30分钟后开场)\n🔗 票务：{show.get('link')}",
                 msg_type="warning"
             )
@@ -194,7 +232,7 @@ def check_pocket48_live():
             display_name = star_name if star_name else nickname
             # 🚀 格式化：使用 success 推送开播喜报
             send_apprise_msg(
-                title=f"[SNH48] {display_name} 开播啦！",
+                title=f"[SNH48-DownLoader] {display_name} 开播啦！",
                 body=f"标题：{title}\n类型：{type_str}\n快去口袋48APP围观吧！",
                 msg_type="success"
             )
@@ -208,9 +246,9 @@ def check_pocket48_live():
 
 @app.on_event("startup")
 def start_scheduler():
-    scheduler.add_job(scanner.scan_all, 'cron', hour='13,23')
-    scheduler.add_job(check_reminders, 'interval', minutes=5)
-    scheduler.add_job(check_pocket48_live, 'interval', minutes=5)
+    scheduler.add_job(check_reminders, 'interval', minutes=5, id='check_reminders')
+    scheduler.add_job(check_pocket48_live, 'interval', minutes=5, id='check_pocket48_live')
+    reschedule_scan_job()
     scheduler.start()
     print("✅ 定时任务及通知引擎已启动(包含口袋48监控)")
 
@@ -236,6 +274,7 @@ def save_config(config: dict):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, allow_unicode=True, sort_keys=False)
     scanner.nfo_builder.roster = scanner.nfo_builder._load_roster(CONFIG_PATH)
+    reschedule_scan_job()
     return {"message": "配置已保存并生效"}
 
 @app.get("/api/history")
