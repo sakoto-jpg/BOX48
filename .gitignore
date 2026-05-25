@@ -5,7 +5,7 @@ config/
 
 # 忽略下载的视频实体文件
 downloads/
-
+DownLoad/
 # 忽略 Python 缓存
 __pycache__/
 *.pyc
