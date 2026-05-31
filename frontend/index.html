@@ -135,7 +135,13 @@
                     </div>
                     
                     <div class="flex justify-between items-center mb-2 px-1">
+                        <button @click="changeMonth(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                        </button>
                         <span class="text-sm font-bold text-slate-700">{{ currentYear }}年 {{ currentMonth }}月</span>
+                        <button @click="changeMonth(1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
                     </div>
 
                     <div class="grid grid-cols-7 gap-1 text-center mb-4">
@@ -363,6 +369,13 @@
                 const daysInMonth = computed(() => new Date(currentYear.value, currentMonth.value, 0).getDate());
                 const firstDayOffset = computed(() => new Date(currentYear.value, currentMonth.value - 1, 1).getDay());
 
+                const changeMonth = (delta) => {
+                    let m = currentMonth.value + delta;
+                    if (m > 12) { currentMonth.value = 1; currentYear.value++; }
+                    else if (m < 1) { currentMonth.value = 12; currentYear.value--; }
+                    else { currentMonth.value = m; }
+                };
+
                 const schedulerStatus = computed(() => {
                     const s = config.value.scheduler;
                     if (!s || s.enabled === false) return "自动扫描：已禁用";
@@ -555,7 +568,7 @@
                 return {
                     history, activeTasks, config, scanMessage, isScanning, manualUrl, isManualDownloading,
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
-                    fetchHistory, triggerScan, triggerManualDownload, saveConfig, toggleManualSub,
+                    changeMonth, fetchHistory, triggerScan, triggerManualDownload, saveConfig, toggleManualSub,
                     addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
                     schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour
                 };

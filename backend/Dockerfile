@@ -4,7 +4,7 @@ WORKDIR /app
 
 # 🚀 新增安装 aria2
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg aria2 && \
+    apt-get install -y --no-install-recommends ffmpeg aria2 mkvtoolnix && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

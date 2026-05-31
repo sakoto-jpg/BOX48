@@ -2,12 +2,14 @@ import os
 import time
 import re
 import shutil
+import glob
 import yt_dlp
 import yaml
 import traceback
 from typing import List, Dict
 from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
+from merger import merge_parts
 
 class Snh48Scanner:
     def __init__(self, config_path: str, cookie_path: str, base_download_path: str):
@@ -69,65 +71,92 @@ class Snh48Scanner:
             overall_plot = parts[0].get('description') or ''
 
         base_episode_path = self.nfo_builder.build_metadata(
-            team_name=target_team, 
-            year=year, 
+            team_name=target_team,
+            year=year,
             date_str=formatted_date,
-            perf_title=title, 
+            perf_title=title,
             plot=overall_plot
         )
-        
-        # 🚀 获取这场公演的独立文件夹路径（用于失败回滚）
+
         perf_dir = os.path.dirname(base_episode_path)
 
         success_count = 0
+        part_files = []   # 已下载的分P文件路径
+        part_titles = []  # 已下载的分P标题
+
         for index, part in enumerate(parts):
             p_number = index + 1
             if bvid in self.active_tasks:
                 self.active_tasks[bvid]['p_current'] = p_number
 
             output_path = f"{base_episode_path} - pt{p_number}"
-            
-            success = self.downloader.download_part(
-                bvid, p_number, output_path, 
+
+            success, real_title = self.downloader.download_part(
+                bvid, p_number, output_path,
                 progress_callback=self._create_hook(bvid)
             )
-            
+
             if success:
                 success_count += 1
+                mkv_file = f"{output_path}.mkv"
+                if os.path.exists(mkv_file):
+                    part_files.append(mkv_file)
+                    part_titles.append(real_title)
             else:
-                # 🚀 立即熔断机制：只要有一P死磕失败，后续的P直接放弃下载
                 print(f"❌ P{p_number} 死磕失败，触发数据完整性保护，中断后续分P下载...", flush=True)
                 break
 
-        # 🚀 事务性入库校验：必须全部成功！
         if success_count == len(parts):
+            # --- 多分P合并为完整视频 + 写入章节 ---
+            if len(part_files) >= 2:
+                if bvid in self.active_tasks:
+                    self.active_tasks[bvid]['status'] = "正在合并分P与生成章节..."
+                print(f"🔗 开始合并 {len(part_files)} 个分P → {base_episode_path}.mkv")
+                merge_ok = merge_parts(part_files, part_titles, base_episode_path)
+                if not merge_ok:
+                    print(f"⚠️ 合并失败，保留独立分P文件")
+            elif len(part_files) == 1:
+                # 单分P：重命名为不带 pt 后缀的标准名称
+                single_file = part_files[0]
+                target_name = f"{base_episode_path}.mkv"
+                if single_file != target_name:
+                    try:
+                        os.replace(single_file, target_name)
+                        # 同时迁移 danmaku 和 nfo
+                        for suffix in ('.danmaku.xml', '.nfo'):
+                            src = os.path.splitext(single_file)[0] + suffix
+                            dst = base_episode_path + suffix if suffix != '.nfo' else f"{base_episode_path}.nfo"
+                            # nfo 已由 build_metadata 生成，只需处理 danmaku
+                            if suffix == '.danmaku.xml' and os.path.exists(src):
+                                os.replace(src, f"{base_episode_path}{suffix}")
+                    except OSError as e:
+                        print(f"⚠️ 单文件重命名失败: {e}")
+
             self._mark_downloaded(bvid, title)
             try:
-                import yaml, requests
+                import requests as req_lib
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     apprise_url = (yaml.safe_load(f) or {}).get("apprise_url", "")
                 if apprise_url:
-                    # 🚀 格式化：去除旧的 format，转用标准 type: success
                     payload = {
                         "title": "[SNH48-DownLoader] 录播入库完成",
                         "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
                         "type": "success"
                     }
-                    requests.post(apprise_url, json=payload, timeout=5)
-            except Exception as e:
+                    req_lib.post(apprise_url, json=payload, timeout=5)
+            except Exception:
                 pass
-            
+
             if bvid in self.active_tasks:
                 del self.active_tasks[bvid]
         else:
-            # 🚀 触发物理回滚：无情删掉半残的文件夹和 NFO
             print(f"🗑️ 触发物理回滚，清理不完整的公演数据目录: {perf_dir}", flush=True)
             try:
                 if os.path.exists(perf_dir):
-                    shutil.rmtree(perf_dir) # 物理抹除该目录及下属所有文件
+                    shutil.rmtree(perf_dir)
             except Exception as e:
                 print(f"⚠️ 清理脏数据失败: {e}", flush=True)
-                
+
             if bvid in self.active_tasks:
                 self.active_tasks[bvid]['status'] = "残缺失败，已回滚清理"
 
@@ -181,12 +210,15 @@ class Snh48Scanner:
                         title = v_info.get('title', '')
                         target_team = self._match_team(title)
                         date_match = re.search(r'202\d{5}', title)
-                        
-                        if target_team and date_match:
+                        if date_match:
                             date_str = date_match.group()
+                        else:
+                            date_str = v_info.get('upload_date', '')
+
+                        if target_team and date_str and re.match(r'^\d{8}$', date_str):
                             year = date_str[:4]
                             formatted_date = f"{year}-{date_str[4:6]}-{date_str[6:8]}"
-                            
+
                             self.active_tasks[bvid] = {
                                 "title": title, "status": "准备下载...", "progress": "0%", "p_current": 0, "p_total": "?"
                             }
@@ -229,8 +261,12 @@ class Snh48Scanner:
                     self.active_tasks[bvid]['title'] = title
                     target_team = self._match_team(title)
                     date_match = re.search(r'202\d{5}', title)
-                    if target_team and date_match:
+                    if date_match:
                         date_str = date_match.group()
+                    else:
+                        date_str = v_info.get('upload_date', '')
+
+                    if target_team and date_str and re.match(r'^\d{8}$', date_str):
                         self._process_video_info(bvid, title, v_info, target_team, date_str, date_str[:4], f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}")
                     else:
                         self.active_tasks[bvid]['status'] = "不符合入库规则"

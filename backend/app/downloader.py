@@ -12,8 +12,6 @@ class BiliDownloader:
             print(f"警告: 未找到 Cookie 文件: {self.cookie_path}，下载高画质可能受限。")
 
     def _get_video_start_time(self, video_path: str) -> float:
-        """获取原始视频流第一帧的 PTS（秒）。B 站 SNH48 官方流中视频轨
-        的首帧 PTS 即等于音轨需要被裁剪的「死区」时长。"""
         try:
             result = subprocess.run([
                 'ffprobe', '-v', 'quiet',
@@ -27,11 +25,9 @@ class BiliDownloader:
 
     def _merge_with_sync_fix(self, video_path: str, audio_path: str,
                              output_path: str, video_start: float) -> bool:
-        """合并音视频轨，按 video_start 裁剪音频头部死区以对齐。"""
         temp_path = output_path + '.temp.mkv'
         try:
             if video_start > 0.1:
-                # 有显著偏移：跳过音频前 video_start 秒（B 站播放器也是这么做的）
                 cmd = [
                     'ffmpeg', '-y', '-loglevel', 'error',
                     '-i', video_path,
@@ -57,7 +53,6 @@ class BiliDownloader:
             else:
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
-                # 修正合并失败时，回退：用 yt-dlp 原始合并结果
                 return False
         except Exception:
             if os.path.exists(temp_path):
@@ -65,13 +60,11 @@ class BiliDownloader:
             return False
 
     def _find_intermediate(self, base_path: str, extensions: list) -> str | None:
-        """查找 yt-dlp 保留的中间文件（命名模式: basename.fXXXXX.ext）。"""
         for ext in extensions:
             pattern = f'{base_path}.f*{ext}'
             candidates = sorted(glob.glob(pattern))
             if candidates:
                 return candidates[0]
-        # 也尝试不带 format-id 的命名
         for ext in extensions:
             pattern = f'{base_path}{ext}'
             candidates = sorted(glob.glob(pattern))
@@ -80,11 +73,16 @@ class BiliDownloader:
         return None
 
     def download_part(self, bvid: str, p_number: int,
-                      output_path_without_ext: str, progress_callback=None) -> bool:
+                      output_path_without_ext: str, progress_callback=None) -> tuple[bool, str]:
+        """下载单个分P。
+
+        Returns:
+            (success: bool, part_title: str) — 标题来自 yt-dlp 下载时获取的真实分P标题
+        """
         ydl_opts = {
             'cookiefile': self.cookie_path,
             'outtmpl': f'{output_path_without_ext}.%(ext)s',
-            'format': 'bestvideo+bestaudio/best',
+            'format': 'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best',
             'merge_output_format': 'mkv',
             'concurrent_fragment_downloads': 10,
             'socket_timeout': 15,
@@ -94,7 +92,7 @@ class BiliDownloader:
             'quiet': True,
             'no_warnings': True,
             'fixup': 'force',
-            'keepvideo': True,   # 保留原始视频/音频文件用于探测 start_time
+            'keepvideo': True,
 
             'extractor_retries': 3,
             'retries': 5,
@@ -106,13 +104,23 @@ class BiliDownloader:
         target_url = f"https://www.bilibili.com/video/{bvid}"
         max_retries = 5
         mkv_file = f"{output_path_without_ext}.mkv"
+        fallback_title = f"P{p_number}"
 
         for attempt in range(1, max_retries + 1):
             print(f"▶ 开始并发切片下载: {bvid} - P{p_number} -> {output_path_without_ext} (尝试 {attempt}/{max_retries})")
 
+            # 捕获真实分P标题
+            part_title = fallback_title
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([target_url])
+                    info = ydl.extract_info(target_url, download=True)
+                    if info:
+                        # anthology 合集视频：标题在 entries[0].title 而非顶层 title
+                        entries = info.get('entries', [])
+                        if entries and entries[0]:
+                            part_title = entries[0].get('title', fallback_title)
+                        else:
+                            part_title = info.get('title', fallback_title)
             except Exception as e:
                 print(f"⚠️ yt-dlp 第 {attempt} 次异常: {e}")
 
@@ -144,7 +152,7 @@ class BiliDownloader:
                 except OSError:
                     pass
 
-            return True
+            return True, part_title
 
         print(f"❌ yt-dlp 已耗尽 {max_retries} 次重试机会，当前分P下载彻底失败。")
-        return False
+        return False, fallback_title
