@@ -84,7 +84,7 @@ class BiliDownloader:
             'outtmpl': f'{output_path_without_ext}.%(ext)s',
             'format': 'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best',
             'merge_output_format': 'mkv',
-            'concurrent_fragment_downloads': 10,
+            'concurrent_fragment_downloads': 16,
             'socket_timeout': 15,
             'writesubtitles': True,
             'subtitleslangs': ['all'],
@@ -96,6 +96,13 @@ class BiliDownloader:
 
             'extractor_retries': 3,
             'retries': 5,
+            'fragment_retries': 5,
+            'file_access_retries': 3,
+
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.bilibili.com/',
+            },
         }
 
         if progress_callback:
@@ -126,8 +133,8 @@ class BiliDownloader:
 
             if not os.path.exists(mkv_file):
                 if attempt < max_retries:
-                    print(f"⏳ 文件未生成，等待 8 秒后重试...")
-                    time.sleep(8)
+                    print(f"⏳ 文件未生成，等待 5 秒后重试...")
+                    time.sleep(5)
                 continue
 
             # --- 音视频同步修正 ---

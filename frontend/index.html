@@ -199,14 +199,17 @@
                             </h4>
                             <div v-for="(task, bvid) in activeTasks" :key="'active'+bvid" class="bg-white border border-blue-200 p-3 rounded-lg shadow-sm relative overflow-hidden">
                                 <div class="absolute top-0 left-0 h-1 bg-slate-100 w-full">
-                                    <div class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-[1500ms] ease-out" 
+                                    <div class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-[1500ms] ease-out"
                                          :style="{ width: (parseFloat(task.progress) || 0) + '%' }"></div>
                                 </div>
                                 <div class="flex justify-between items-start mt-2">
                                     <div class="w-3/4">
                                         <p class="text-sm font-bold text-slate-800 line-clamp-1" :title="task.title">{{ task.title }}</p>
                                         <p class="text-xs mt-1 font-medium" :class="task.status.includes('失败') ? 'text-red-500' : 'text-blue-500'">
-                                            {{ task.status }} <span v-if="task.p_total && task.p_total !== '?'">({{ task.p_current }}/{{ task.p_total }} P)</span>
+                                            {{ task.status }} <span v-if="task.p_total && task.p_total !== '?'">({{ task.p_done || 0 }}/{{ task.p_total }} P)</span>
+                                        </p>
+                                        <p v-if="task.part_progress && Object.keys(task.part_progress).length > 1" class="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                            <template v-for="(pct, pn) in task.part_progress" :key="pn">P{{ pn }}:{{ pct }} </template>
                                         </p>
                                     </div>
                                     <span class="text-sm font-mono font-extrabold" :class="task.status.includes('失败') ? 'text-red-500' : 'text-indigo-600'">

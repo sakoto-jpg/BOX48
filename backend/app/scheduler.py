@@ -3,10 +3,12 @@ import time
 import re
 import shutil
 import glob
+import threading
 import yt_dlp
 import yaml
 import traceback
 from typing import List, Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
 from merger import merge_parts
@@ -20,6 +22,7 @@ class Snh48Scanner:
         self.history_file = os.path.join(os.path.dirname(config_path), "download_history.txt")
         self._ensure_history_file()
         self.active_tasks = {}
+        self._progress_lock = threading.Lock()
 
     def _ensure_history_file(self):
         if not os.path.exists(self.history_file):
@@ -47,24 +50,42 @@ class Snh48Scanner:
                     return team_name
         return None
 
-    def _create_hook(self, bvid):
+    def _create_hook(self, bvid, p_number=None):
+        lock = self._progress_lock
         def hook(d):
-            if d['status'] == 'downloading':
-                percent = d.get('_percent_str', '0%')
-                clean_percent = re.sub(r'\x1b\[[0-9;]*m', '', percent).strip()
-                if bvid in self.active_tasks:
-                    self.active_tasks[bvid]['progress'] = clean_percent
-                    self.active_tasks[bvid]['status'] = "视频下载中..."
-            elif d['status'] == 'finished':
-                if bvid in self.active_tasks:
-                    self.active_tasks[bvid]['progress'] = '100%'
-                    self.active_tasks[bvid]['status'] = "正在合并文件..."
+            with lock:
+                if bvid not in self.active_tasks:
+                    return
+                task = self.active_tasks[bvid]
+                if 'part_progress' not in task:
+                    task['part_progress'] = {}
+
+                if d['status'] == 'downloading':
+                    percent = d.get('_percent_str', '0%')
+                    clean_percent = re.sub(r'\x1b\[[0-9;]*m', '', percent).strip()
+                    if p_number is not None:
+                        task['part_progress'][p_number] = clean_percent
+                    else:
+                        task['progress'] = clean_percent
+                elif d['status'] == 'finished':
+                    if p_number is not None:
+                        task['part_progress'][p_number] = '100%'
+                        task['p_done'] = task.get('p_done', 0) + 1
+
+                if task.get('part_progress'):
+                    parts = task['part_progress']
+                    total_pct = sum(float(str(p).replace('%', '')) for p in parts.values())
+                    task['progress'] = f"{total_pct / len(parts):.1f}%"
+
+                task['status'] = "视频下载中..."
         return hook
 
     def _process_video_info(self, bvid: str, title: str, video_info: dict, target_team: str, date_str: str, year: str, formatted_date: str):
         parts = video_info.get('entries') if 'entries' in video_info else [video_info]
         if bvid in self.active_tasks:
             self.active_tasks[bvid]['p_total'] = len(parts)
+            self.active_tasks[bvid]['p_done'] = 0
+            self.active_tasks[bvid]['part_progress'] = {}
 
         overall_plot = video_info.get('description') or ''
         if not overall_plot and parts:
@@ -84,18 +105,40 @@ class Snh48Scanner:
         part_files = []   # 已下载的分P文件路径
         part_titles = []  # 已下载的分P标题
 
-        for index, part in enumerate(parts):
+        stop_flag = threading.Event()
+
+        def _download_one(index: int, part: dict):
+            if stop_flag.is_set():
+                return None
             p_number = index + 1
-            if bvid in self.active_tasks:
-                self.active_tasks[bvid]['p_current'] = p_number
-
             output_path = f"{base_episode_path} - pt{p_number}"
-
             success, real_title = self.downloader.download_part(
                 bvid, p_number, output_path,
-                progress_callback=self._create_hook(bvid)
+                progress_callback=self._create_hook(bvid, p_number)
             )
+            if not success:
+                stop_flag.set()
+            return p_number, success, real_title, output_path
 
+        max_workers = 3
+        raw_results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []
+            for index, part in enumerate(parts):
+                if stop_flag.is_set():
+                    break
+                if index > 0:
+                    time.sleep(0.8)
+                futures.append(executor.submit(_download_one, index, part))
+
+            for future in as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    raw_results.append(result)
+
+        raw_results.sort(key=lambda x: x[0])
+
+        for p_number, success, real_title, output_path in raw_results:
             if success:
                 success_count += 1
                 mkv_file = f"{output_path}.mkv"

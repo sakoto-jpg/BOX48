@@ -8,6 +8,7 @@ class NfoBuilder:
     def __init__(self, config_path: str, base_download_path: str):
         self.base_download_path = base_download_path
         self.roster = self._load_roster(config_path)
+        self.performances = self._load_performances(config_path)
 
     def _load_roster(self, config_path: str) -> dict:
         if not os.path.exists(config_path): return {}
@@ -23,6 +24,21 @@ class NfoBuilder:
                         "keywords": team.get('keywords', [team['name']])
                     }
         return roster_dict
+
+    def _load_performances(self, config_path: str) -> list:
+        performances_path = os.path.join(os.path.dirname(config_path), "performances.yaml")
+        if not os.path.exists(performances_path):
+            return []
+        with open(performances_path, 'r', encoding='utf-8') as f:
+            data = yaml.safe_load(f)
+        return (data or {}).get('performances', [])
+
+    def _match_performance(self, title: str) -> list | None:
+        for perf in self.performances:
+            for kw in perf.get('keywords', []):
+                if kw in title:
+                    return perf.get('members', [])
+        return None
 
     def _prettify_xml(self, elem) -> str:
         rough_string = ET.tostring(elem, 'utf-8')
@@ -72,8 +88,10 @@ class NfoBuilder:
             ET.SubElement(ep_details, "aired").text = date_str
             ET.SubElement(ep_details, "plot").text = plot
 
-            team_data = self.roster.get(team_name, {})
-            members = team_data.get("members", [])
+            members = self._match_performance(perf_title)
+            if members is None:
+                team_data = self.roster.get(team_name, {})
+                members = team_data.get("members", [])
             for member in members:
                 actor = ET.SubElement(ep_details, "actor")
                 ET.SubElement(actor, "name").text = member
