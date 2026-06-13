@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
 from merger import merge_parts
+from emby_client import EmbyClient
 
 class Snh48Scanner:
     def __init__(self, config_path: str, cookie_path: str, base_download_path: str):
@@ -23,11 +24,35 @@ class Snh48Scanner:
         self._ensure_history_file()
         self.active_tasks = {}
         self._progress_lock = threading.Lock()
+        self.emby_client = None
+        self._init_emby_client()
 
     def _ensure_history_file(self):
         if not os.path.exists(self.history_file):
             with open(self.history_file, 'w', encoding='utf-8') as f:
                 f.write("")
+
+    def _init_emby_client(self):
+        """从配置文件加载 Emby 设置并初始化客户端"""
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+            emby_cfg = config.get("emby", {})
+            server_url = emby_cfg.get("server_url", "")
+            api_key = emby_cfg.get("api_key", "")
+            library_name = emby_cfg.get("library_name", "公演直播回放")
+            if server_url and api_key:
+                self.emby_client = EmbyClient(server_url, api_key, library_name)
+                print(f"✅ [Emby] 客户端已初始化: {library_name} @ {server_url}", flush=True)
+            else:
+                self.emby_client = None
+        except Exception as e:
+            print(f"⚠️ [Emby] 初始化失败: {e}", flush=True)
+            self.emby_client = None
+
+    def reload_emby_client(self):
+        """配置变更后重新加载 Emby 客户端"""
+        self._init_emby_client()
 
     def _is_downloaded(self, bvid: str) -> bool:
         if not os.path.exists(self.history_file): return False
@@ -189,6 +214,13 @@ class Snh48Scanner:
                     req_lib.post(apprise_url, json=payload, timeout=5)
             except Exception:
                 pass
+
+            # 自动刷新 Emby 媒体库，无需手动扫描
+            if self.emby_client:
+                try:
+                    self.emby_client.refresh_library()
+                except Exception:
+                    pass
 
             if bvid in self.active_tasks:
                 del self.active_tasks[bvid]

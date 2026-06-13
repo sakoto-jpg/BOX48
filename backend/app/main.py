@@ -274,6 +274,7 @@ def save_config(config: dict):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, allow_unicode=True, sort_keys=False)
     scanner.nfo_builder.roster = scanner.nfo_builder._load_roster(CONFIG_PATH)
+    scanner.reload_emby_client()
     reschedule_scan_job()
     return {"message": "配置已保存并生效"}
 
@@ -302,3 +303,111 @@ def download_specific_video(payload: dict, background_tasks: BackgroundTasks):
         return {"message": "未提供有效链接"}
     background_tasks.add_task(scanner.download_single, url)
     return {"message": "指令已投递，系统正在后台解析下载"}
+
+@app.get("/api/emby_status")
+def get_emby_status():
+    """检测 Emby 连接状态"""
+    config = get_current_config()
+    emby_cfg = config.get("emby", {})
+    server_url = emby_cfg.get("server_url", "").strip().rstrip("/")
+    api_key = emby_cfg.get("api_key", "").strip()
+    library_name = emby_cfg.get("library_name", "公演直播回放")
+
+    if not server_url or not api_key:
+        return {
+            "configured": False,
+            "status": "warning",
+            "message": "Emby 未配置，请填写 server_url 和 api_key",
+            "server_url": server_url,
+            "library_name": library_name
+        }
+
+    headers = {"X-Emby-Token": api_key}
+    result = {
+        "configured": True,
+        "server_url": server_url,
+        "library_name": library_name,
+        "status": "error",
+        "message": ""
+    }
+
+    try:
+        # 尝试获取 Emby 系统信息以验证 API Key 是否有效
+        resp = requests.get(
+            f"{server_url}/emby/System/Info",
+            headers=headers,
+            timeout=8
+        )
+        if resp.status_code == 401:
+            result["status"] = "error"
+            result["message"] = "API Key 无效或未授权，请在 Emby 管理后台重新生成"
+        elif resp.status_code == 200:
+            # API Key 有效，进一步查找目标媒体库
+            try:
+                lib_resp = requests.get(
+                    f"{server_url}/emby/Library/VirtualFolders",
+                    headers=headers,
+                    timeout=8
+                )
+                if lib_resp.status_code == 200:
+                    found = False
+                    for folder in lib_resp.json():
+                        if folder.get("Name") == library_name:
+                            found = True
+                            result["library_id"] = folder.get("ItemId")
+                            break
+                    if found:
+                        result["status"] = "success"
+                        result["message"] = f"连接成功，已找到媒体库「{library_name}」"
+                    else:
+                        # Fallback to Items search
+                        try:
+                            items_resp = requests.get(
+                                f"{server_url}/emby/Items",
+                                params={"IncludeItemTypes": "CollectionFolder", "Recursive": "false"},
+                                headers=headers,
+                                timeout=8
+                            )
+                            if items_resp.status_code == 200:
+                                found2 = False
+                                for item in items_resp.json().get("Items", []):
+                                    if item.get("Name") == library_name:
+                                        found2 = True
+                                        result["library_id"] = item.get("Id")
+                                        break
+                                if found2:
+                                    result["status"] = "success"
+                                    result["message"] = f"连接成功，已找到媒体库「{library_name}」"
+                                else:
+                                    result["status"] = "warning"
+                                    result["message"] = f"API Key 有效，但未找到媒体库「{library_name}」，请检查 library_name 配置"
+                                    # 列出可用媒体库名供参考
+                                    result["available_libraries"] = [
+                                        f.get("Name", "?") for f in lib_resp.json()
+                                    ]
+                            else:
+                                result["status"] = "warning"
+                                result["message"] = f"API Key 有效，但查询媒体库列表失败 (HTTP {items_resp.status_code})"
+                        except Exception:
+                            result["status"] = "warning"
+                            result["message"] = f"API Key 有效，但未找到媒体库「{library_name}」"
+                else:
+                    result["status"] = "warning"
+                    result["message"] = f"API Key 有效，但获取媒体库列表失败 (HTTP {lib_resp.status_code})"
+            except Exception as e:
+                result["status"] = "warning"
+                result["message"] = f"API Key 有效，但查询媒体库时出错: {e}"
+        else:
+            result["status"] = "error"
+            result["message"] = f"无法连接 Emby 服务器 (HTTP {resp.status_code})"
+    except requests.ConnectionError:
+        result["status"] = "error"
+        result["message"] = f"无法连接到 {server_url}，请检查 server_url 和网络"
+    except requests.Timeout:
+        result["status"] = "error"
+        result["message"] = f"连接 {server_url} 超时，请检查 server_url 和网络"
+    except Exception as e:
+        result["status"] = "error"
+        result["message"] = f"检测失败: {str(e)}"
+
+    return result
