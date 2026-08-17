@@ -29,7 +29,7 @@
         <header class="flex justify-between items-end mb-8 pb-4 border-b border-slate-200">
             <div>
                 <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 tracking-tight">SNH48 Group</h1>
-                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v2.5 (带微信推送引擎)</p>
+                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v4.3 (带微信推送引擎)</p>
             </div>
             <div class="flex items-center gap-3">
                 <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
@@ -126,6 +126,25 @@
 
                     <!-- 状态 -->
                     <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
+                </div>
+
+                <!-- 下载策略 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">下载策略</h2>
+                    </div>
+
+                    <label class="text-sm font-medium text-slate-600 block mb-2">视频编码偏好</label>
+                    <div class="flex gap-2 mb-2">
+                        <button @click="config.preferred_codec = 'av1'"
+                            :class="config.preferred_codec === 'av1' ? 'bg-purple-50 text-purple-700 border-purple-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">AV1（更省空间）</button>
+                        <button @click="config.preferred_codec = 'avc'"
+                            :class="config.preferred_codec === 'avc' ? 'bg-purple-50 text-purple-700 border-purple-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">H.264（兼容性最好）</button>
+                    </div>
+                    <p class="text-xs text-slate-400">AV1 需播放设备支持硬解；若部分分P无 AV1 源，整场自动回退 H.264 以保证分P可无损合并。仅对之后下载的录播生效。</p>
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
@@ -429,7 +448,7 @@
                 
                 const history = ref([]);
                 const activeTasks = ref({});
-                const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" } });
+                const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, preferred_codec: "av1" });
                 const scanMessage = ref("");
                 const isScanning = ref(false);
                 const manualUrl = ref("");
@@ -511,6 +530,7 @@
                         if (!data.emby) {
                             data.emby = { server_url: "", api_key: "", library_name: "公演直播回放" };
                         }
+                        if (!data.preferred_codec) data.preferred_codec = "av1";
                         config.value = data;
                         scanMessage.value = schedulerStatus.value;
                         // 配置加载后自动检测 Emby 连接

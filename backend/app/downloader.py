@@ -73,16 +73,26 @@ class BiliDownloader:
         return None
 
     def download_part(self, bvid: str, p_number: int,
-                      output_path_without_ext: str, progress_callback=None) -> tuple[bool, str]:
+                      output_path_without_ext: str, progress_callback=None,
+                      prefer_codec: str = 'avc') -> tuple[bool, str]:
         """下载单个分P。
+
+        Args:
+            prefer_codec: 'av01' 优先 AV1 源流(体积更小)，'avc' 优先 H.264(现状)
 
         Returns:
             (success: bool, part_title: str) — 标题来自 yt-dlp 下载时获取的真实分P标题
         """
+        if prefer_codec == 'av01':
+            format_sel = ('bestvideo[vcodec^=av01]+bestaudio/'
+                          'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best')
+        else:
+            format_sel = 'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best'
+
         ydl_opts = {
             'cookiefile': self.cookie_path,
             'outtmpl': f'{output_path_without_ext}.%(ext)s',
-            'format': 'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best',
+            'format': format_sel,
             'merge_output_format': 'mkv',
             'concurrent_fragment_downloads': 16,
             'socket_timeout': 15,
@@ -114,7 +124,9 @@ class BiliDownloader:
         fallback_title = f"P{p_number}"
 
         for attempt in range(1, max_retries + 1):
-            print(f"▶ 开始并发切片下载: {bvid} - P{p_number} -> {output_path_without_ext} (尝试 {attempt}/{max_retries})")
+            codec_label = 'AV1' if prefer_codec == 'av01' else 'H.264(AVC)'
+            print(f"▶ 开始并发切片下载: {bvid} - P{p_number} -> {output_path_without_ext} "
+                  f"(编码偏好 {codec_label}，尝试 {attempt}/{max_retries})")
 
             # 捕获真实分P标题
             part_title = fallback_title

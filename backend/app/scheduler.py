@@ -75,6 +75,48 @@ class Snh48Scanner:
                     return team_name
         return None
 
+    def _get_preferred_codec(self) -> str:
+        """读取 preferred_codec 配置。显式 'avc' → 强制 H.264；其余(含缺失、'av1')→ 优先 AV1。"""
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+            return 'avc' if config.get('preferred_codec') == 'avc' else 'av01'
+        except Exception as e:
+            print(f"⚠️ 读取 preferred_codec 配置失败，回退 AVC: {e}", flush=True)
+            return 'avc'
+
+    def _probe_av1_availability(self, bvid: str) -> bool:
+        """整场探测：所有分P均提供 AV1 源才返回 True，否则(含探测失败)返回 False。
+
+        分P合并要求编码一致，混编会导致合并失败，故采用整场判断。
+        """
+        ydl_opts = {
+            'cookiefile': self.cookie_path,
+            'quiet': True,
+            'no_warnings': True,
+            'extractor_retries': 3,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.bilibili.com/'
+            }
+        }
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
+            entries = info.get('entries') if info else None
+            if not entries:
+                return False
+            for entry in entries:
+                if not entry:
+                    return False
+                if not any((f.get('vcodec') or '').startswith('av01')
+                           for f in entry.get('formats') or []):
+                    return False
+            return True
+        except Exception as e:
+            print(f"⚠️ AV1 整场探测失败，本场回退 AVC: {e}", flush=True)
+            return False
+
     def _create_hook(self, bvid, p_number=None):
         lock = self._progress_lock
         def hook(d):
@@ -112,6 +154,12 @@ class Snh48Scanner:
             self.active_tasks[bvid]['p_done'] = 0
             self.active_tasks[bvid]['part_progress'] = {}
 
+        # 编码偏好：AV1 优先时先整场探测，确保各分P编码一致、可无损合并
+        prefer_codec = self._get_preferred_codec()
+        if prefer_codec == 'av01' and not self._probe_av1_availability(bvid):
+            print(f"⚠️ {bvid} 部分分P无 AV1 源，本场回退 H.264(AVC) 编码下载", flush=True)
+            prefer_codec = 'avc'
+
         overall_plot = video_info.get('description') or ''
         if not overall_plot and parts:
             overall_plot = parts[0].get('description') or ''
@@ -139,7 +187,8 @@ class Snh48Scanner:
             output_path = f"{base_episode_path} - pt{p_number}"
             success, real_title = self.downloader.download_part(
                 bvid, p_number, output_path,
-                progress_callback=self._create_hook(bvid, p_number)
+                progress_callback=self._create_hook(bvid, p_number),
+                prefer_codec=prefer_codec
             )
             if not success:
                 stop_flag.set()
