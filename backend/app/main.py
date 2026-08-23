@@ -285,15 +285,34 @@ def get_history():
     if os.path.exists(history_file):
         with open(history_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-            for line in lines:
+            seen = set()
+            # 新行格式: bvid|title|codec|path；旧行为 2 字段或裸 bvid。
+            # 倒序(新→旧)遍历并按 bvid 去重：同一场多次入库(手动补档/洗版)只显示最新一条。
+            for line in reversed(lines):
+                line = line.strip()
+                if not line:
+                    continue
                 if '|' in line:
-                    bvid, title = line.strip().split('|', 1)
-                    completed.append({"id": bvid, "title": title})
+                    parts = line.split('|', 3)
+                    bvid = parts[0].strip()
+                    if bvid in seen:
+                        continue
+                    seen.add(bvid)
+                    entry = {
+                        "id": bvid,
+                        "title": parts[1].strip() if len(parts) > 1 else "历史导入数据",
+                    }
+                    if len(parts) > 2 and parts[2].strip():
+                        entry["codec"] = parts[2].strip()
+                    completed.append(entry)
                 else:
-                    completed.append({"id": line.strip(), "title": "历史导入数据"})
+                    if line in seen:
+                        continue
+                    seen.add(line)
+                    completed.append({"id": line, "title": "历史导入数据"})
     return {
-        "completed": completed[::-1],
-        "active": scanner.active_tasks 
+        "completed": completed,
+        "active": scanner.active_tasks
     }
 
 @app.post("/api/download_specific")

@@ -11,7 +11,7 @@ from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
-from merger import merge_parts
+from merger import merge_parts, _get_video_codec as get_video_codec
 from emby_client import EmbyClient
 
 class Snh48Scanner:
@@ -25,6 +25,7 @@ class Snh48Scanner:
         self.active_tasks = {}
         self._progress_lock = threading.Lock()
         self.emby_client = None
+        self._wash_failed = {}   # bvid -> 失败时间戳，洗版失败 24h 内不重试
         self._init_emby_client()
 
     def _ensure_history_file(self):
@@ -60,9 +61,10 @@ class Snh48Scanner:
             content = f.read()
             return bvid in content
 
-    def _mark_downloaded(self, bvid: str, title: str):
+    def _mark_downloaded(self, bvid: str, title: str, codec: str = '', path: str = ''):
+        # 行格式: bvid|title|codec|path（旧行为 2 字段，读取侧兼容）
         with open(self.history_file, 'a', encoding='utf-8') as f:
-            f.write(f"{bvid}|{title}\n")
+            f.write(f"{bvid}|{title}|{codec}|{path}\n")
 
     def _match_team(self, title: str) -> str:
         for team_name, team_data in self.nfo_builder.roster.items():
@@ -106,12 +108,14 @@ class Snh48Scanner:
             entries = info.get('entries') if info else None
             if not entries:
                 return False
-            for entry in entries:
-                if not entry:
-                    return False
-                if not any((f.get('vcodec') or '').startswith('av01')
-                           for f in entry.get('formats') or []):
-                    return False
+            missing_parts = []
+            for i, entry in enumerate(entries):
+                if not entry or not any((f.get('vcodec') or '').startswith('av01')
+                                        for f in entry.get('formats') or []):
+                    missing_parts.append(i + 1)
+            if missing_parts:
+                print(f"⚠️ 整场 AV1 探测：分P {', '.join(map(str, missing_parts))} 无 AV1 源", flush=True)
+                return False
             return True
         except Exception as e:
             print(f"⚠️ AV1 整场探测失败，本场回退 AVC: {e}", flush=True)
@@ -147,7 +151,10 @@ class Snh48Scanner:
                 task['status'] = "视频下载中..."
         return hook
 
-    def _process_video_info(self, bvid: str, title: str, video_info: dict, target_team: str, date_str: str, year: str, formatted_date: str):
+    def _process_video_info(self, bvid: str, title: str, video_info: dict, target_team: str, date_str: str, year: str, formatted_date: str,
+                            keep_existing: bool = False):
+        """下载整场公演并入库。keep_existing=True(洗版)时失败回滚不删除原有合并文件。"""
+        run_start = time.time()
         parts = video_info.get('entries') if 'entries' in video_info else [video_info]
         if bvid in self.active_tasks:
             self.active_tasks[bvid]['p_total'] = len(parts)
@@ -249,7 +256,10 @@ class Snh48Scanner:
                     except OSError as e:
                         print(f"⚠️ 单文件重命名失败: {e}")
 
-            self._mark_downloaded(bvid, title)
+            # 记录入库编码与最终文件路径（供前端展示与自动洗版使用）
+            final_path = f"{base_episode_path}.mkv"
+            codec = get_video_codec(final_path)
+            self._mark_downloaded(bvid, title, codec, final_path)
             try:
                 import requests as req_lib
                 with open(self.config_path, 'r', encoding='utf-8') as f:
@@ -274,15 +284,28 @@ class Snh48Scanner:
             if bvid in self.active_tasks:
                 del self.active_tasks[bvid]
         else:
-            print(f"🗑️ 触发物理回滚，清理不完整的公演数据目录: {perf_dir}", flush=True)
-            try:
-                if os.path.exists(perf_dir):
-                    shutil.rmtree(perf_dir)
-            except Exception as e:
-                print(f"⚠️ 清理脏数据失败: {e}", flush=True)
+            if keep_existing:
+                # 洗版失败：仅清理本次运行产生的分P/临时文件，保留原有合并文件与字幕
+                print(f"🧹 洗版失败回滚：仅清理本次分P文件，保留原有文件", flush=True)
+                for pattern in (f"{base_episode_path} - pt*", f"{base_episode_path}.temp.mkv"):
+                    for f in glob.glob(pattern):
+                        try:
+                            if os.path.getmtime(f) >= run_start:
+                                os.remove(f)
+                        except OSError:
+                            pass
+                if bvid in self.active_tasks:
+                    self.active_tasks[bvid]['status'] = "洗版失败，保留原文件"
+            else:
+                print(f"🗑️ 触发物理回滚，清理不完整的公演数据目录: {perf_dir}", flush=True)
+                try:
+                    if os.path.exists(perf_dir):
+                        shutil.rmtree(perf_dir)
+                except Exception as e:
+                    print(f"⚠️ 清理脏数据失败: {e}", flush=True)
 
-            if bvid in self.active_tasks:
-                self.active_tasks[bvid]['status'] = "残缺失败，已回滚清理"
+                if bvid in self.active_tasks:
+                    self.active_tasks[bvid]['status'] = "残缺失败，已回滚清理"
 
     def scan_and_download(self, space_url=""):
         if "/video" not in space_url:
@@ -358,15 +381,13 @@ class Snh48Scanner:
                     else:
                         print(f"❌ 解析详情彻底失败 {bvid}", flush=True)
 
-    def download_single(self, video_url: str):
-        bvid_match = re.search(r'(BV\w+)', video_url)
-        if not bvid_match: return
-        bvid = bvid_match.group(1)
+    def _process_bvid(self, bvid: str, keep_existing: bool = False) -> bool:
+        """解析 bvid → 匹配团队/日期 → 下载入库。手动补档与自动洗版共用。
 
-        self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
-        
+        调用前需保证 active_tasks[bvid] 已存在(用于进度展示)。
+        """
         ydl_opts_full = {
-            'cookiefile': self.cookie_path, 
+            'cookiefile': self.cookie_path,
             'quiet': True,
             'extract_flat': True, # 🚀 浅层扫视：拿完目录就撤退，降低前期报错率
             'extractor_retries': 3,
@@ -375,7 +396,7 @@ class Snh48Scanner:
                 'Referer': 'https://www.bilibili.com/'
             }
         }
-        
+
         max_retries = 8
         for attempt in range(1, max_retries + 1):
             try:
@@ -391,23 +412,101 @@ class Snh48Scanner:
                         date_str = v_info.get('upload_date', '')
 
                     if target_team and date_str and re.match(r'^\d{8}$', date_str):
-                        self._process_video_info(bvid, title, v_info, target_team, date_str, date_str[:4], f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}")
+                        self._process_video_info(bvid, title, v_info, target_team, date_str,
+                                                 date_str[:4], f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}",
+                                                 keep_existing=keep_existing)
                     else:
                         self.active_tasks[bvid]['status'] = "不符合入库规则"
-                    return 
+                    return True
             except Exception as e:
-                print(f"⚠️ [手动下载] 第 {attempt} 次解析信息失败 {bvid}: {e}", flush=True)
+                print(f"⚠️ [解析信息] 第 {attempt} 次解析失败 {bvid}: {e}", flush=True)
                 if attempt < max_retries:
                     sleep_time = attempt * 10
                     self.active_tasks[bvid]['status'] = f"解析受阻，冷却{sleep_time}s({attempt}/{max_retries})"
                     time.sleep(sleep_time)
                 else:
-                    print(f"❌ 手动解析视频彻底崩溃 {bvid}: {e}", flush=True)
+                    print(f"❌ 解析视频彻底崩溃 {bvid}: {e}", flush=True)
                     traceback.print_exc()
                     self.active_tasks[bvid]['status'] = "解析彻底失败"
+        return False
+
+    def download_single(self, video_url: str):
+        bvid_match = re.search(r'(BV\w+)', video_url)
+        if not bvid_match: return
+        bvid = bvid_match.group(1)
+
+        self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
+        self._process_bvid(bvid)
+
+    def _auto_rewash(self):
+        """自动洗版：检查最近入库的 2 场公演(按 bvid 去重)，
+        实际文件编码与下载策略所选编码不符、且 B 站已提供目标编码源流时，自动重新下载替换。"""
+        preferred = self._get_preferred_codec()          # 'av01' / 'avc'
+        target_codec = 'av1' if preferred == 'av01' else 'h264'
+
+        # 读历史，去重取每场最新行，只取最近 2 场
+        candidates = []
+        try:
+            with open(self.history_file, 'r', encoding='utf-8') as f:
+                seen = set()
+                for line in reversed(f.read().splitlines()):
+                    line = line.strip()
+                    if not line or '|' not in line:
+                        continue
+                    parts = line.split('|', 3)
+                    if len(parts) < 4:
+                        continue   # 旧格式行无 codec/path，无法洗版
+                    bvid, title, codec, path = (p.strip() for p in parts)
+                    if not bvid or bvid in seen:
+                        continue
+                    seen.add(bvid)
+                    candidates.append((bvid, title, codec, path))
+                    if len(candidates) >= 2:
+                        break
+        except Exception as e:
+            print(f"⚠️ 洗版：读取历史失败: {e}", flush=True)
+            return
+
+        if not candidates:
+            return
+
+        for bvid, title, codec, path in candidates:
+            if not codec or not path or not os.path.exists(path):
+                continue
+            if bvid in self.active_tasks:
+                continue   # 正在下载/洗版中
+            if time.time() - self._wash_failed.get(bvid, 0) < 24 * 3600:
+                continue   # 24h 冷却，防反复重下
+
+            actual = get_video_codec(path)
+            if not actual:
+                continue
+            if actual == target_codec:
+                print(f"  ✓ 洗版检查 {bvid}: 文件已是 {actual}，无需洗版", flush=True)
+                continue
+            if target_codec == 'av1' and not self._probe_av1_availability(bvid):
+                print(f"  ⏭️ 洗版暂缓 {bvid}: B 站尚无 AV1 源，待下轮扫描重试", flush=True)
+                continue
+
+            print(f"🔄 洗版启动: {bvid} [{codec} → {target_codec}] {title}", flush=True)
+            self.active_tasks[bvid] = {"title": title, "status": "洗版下载中...", "progress": "0%", "p_current": 0, "p_total": "?"}
+            try:
+                self._process_bvid(bvid, keep_existing=True)
+                new_codec = get_video_codec(path) if os.path.exists(path) else ''
+                if new_codec != target_codec:
+                    # 下载失败且原文件被保留：进入冷却，下轮扫描再评估
+                    self._wash_failed[bvid] = time.time()
+                    print(f"⚠️ 洗版未达标 {bvid}: 文件仍为 {new_codec or '未知'},进入 24h 冷却", flush=True)
+                else:
+                    print(f"🎉 洗版完成: {bvid} → {new_codec}", flush=True)
+            except Exception as e:
+                self._wash_failed[bvid] = time.time()
+                print(f"⚠️ 洗版异常 {bvid}: {e}", flush=True)
 
     def scan_all(self):
         with open(self.config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
         for sub in data.get('subscriptions', []):
             self.scan_and_download(sub.get('url'))
+        # 扫描结束后自动洗版：独立线程运行，不阻塞后续定时扫描(下载耗时较长)
+        threading.Thread(target=self._auto_rewash, daemon=True).start()
