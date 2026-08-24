@@ -132,7 +132,8 @@ def check_reminders():
             should_notify = True
         else:
             for team in config.get("teams", []):
-                if team.get("enabled") and team.get("notify", False):
+                # 🚀 排期提醒与"录播自动入库"解耦：只由队伍的通知开关(notify)控制
+                if team.get("notify", False):
                     for kw in team.get("keywords", []):
                         clean_kw = kw.replace("《", "").replace("》", "")
                         if clean_kw in title:
@@ -179,11 +180,11 @@ def check_pocket48_live():
     apprise_url = config.get("apprise_url", "")
     if not apprise_url: return
 
+    # 🚀 开播提醒与"录播自动入库"解耦：监控所有队伍的 oshi，只看名单本身
     all_oshis = set()
     for team in config.get("teams", []):
-        if team.get("enabled"):
-            for oshi in team.get("oshis", []):
-                all_oshis.add(oshi)
+        for oshi in team.get("oshis", []):
+            all_oshis.add(oshi)
                 
     if not all_oshis: return
 

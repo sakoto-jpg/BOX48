@@ -265,11 +265,19 @@ class Snh48Scanner:
                 with open(self.config_path, 'r', encoding='utf-8') as f:
                     apprise_url = (yaml.safe_load(f) or {}).get("apprise_url", "")
                 if apprise_url:
-                    payload = {
-                        "title": "[SNH48-DownLoader] 录播入库完成",
-                        "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
-                        "type": "success"
-                    }
+                    if keep_existing:
+                        codec_label = {'av1': 'AV1', 'h264': 'H.264', 'hevc': 'HEVC'}.get(codec, codec.upper())
+                        payload = {
+                            "title": "[SNH48-DownLoader] 洗版完成",
+                            "body": f"【{title}】\n已重新下载并替换为 {codec_label} 编码，前往 Emby 观看！",
+                            "type": "success"
+                        }
+                    else:
+                        payload = {
+                            "title": "[SNH48-DownLoader] 录播入库完成",
+                            "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
+                            "type": "success"
+                        }
                     req_lib.post(apprise_url, json=payload, timeout=5)
             except Exception:
                 pass
