@@ -58,6 +58,28 @@ def _clean_chapter_title(raw_title: str) -> str:
     return cleaned if cleaned else raw_title
 
 
+_SPECIAL_SEGMENT_RE = re.compile(r'MC|拉票|生日|生诞')
+
+
+def is_song_part(raw_title) -> bool:
+    """判断分P是否为大歌/unit曲环节(仅MC模式过滤用)。
+
+    必须用 _clean_chapter_title 清洗后判断：原始分P标题的公共前缀中已含整场
+    标题的《》(如「…原创公演《时之卷》20201227 p01 《雪之国》…」)，直接判断
+    会误伤所有分P。清洗后含「《」视为歌曲环节；但 MC/拉票/生日等特殊环节的
+    标题常提及成员表演曲目(如「拉票环节《我的舞台》」)，命中的一律保留。
+    None/空返回 False(flat 标题缺失时保留该分P，下载后二次校验)。
+    """
+    if not raw_title:
+        return False
+    cleaned = _clean_chapter_title(raw_title)
+    if not cleaned:
+        return False
+    if _SPECIAL_SEGMENT_RE.search(cleaned):
+        return False
+    return '《' in cleaned
+
+
 def _generate_chapter_xml(part_files: list[str], part_titles: list[str]) -> str:
     """生成 Matroska 章节 XML 文件，返回文件路径。"""
     xml_path = f"/tmp/chapters_{uuid.uuid4().hex}.xml"

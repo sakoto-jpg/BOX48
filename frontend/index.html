@@ -29,7 +29,7 @@
         <header class="flex justify-between items-end mb-8 pb-4 border-b border-slate-200">
             <div>
                 <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-purple-600 tracking-tight">SNH48 Group</h1>
-                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v4.5</p>
+                <p class="text-slate-500 mt-1 font-medium">自动化录播入库系统 v4.6</p>
             </div>
             <div class="flex items-center gap-3">
                 <span class="relative flex h-3 w-3"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span><span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span></span>
@@ -161,6 +161,35 @@
                             class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">H.264（兼容性最好）</button>
                     </div>
                     <p class="text-xs text-slate-400">AV1 需播放设备支持硬解；若部分分P无 AV1 源，整场自动回退 H.264 以保证分P可无损合并。仅对之后下载的录播生效。</p>
+                </div>
+
+                <!-- 下载范围 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">下载范围</h2>
+                    </div>
+
+                    <label class="text-sm font-medium text-slate-600 block mb-2">自动入库（定时扫描）</label>
+                    <div class="flex gap-2 mb-4">
+                        <button @click="config.auto_download_scope = 'full'"
+                            :class="config.auto_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
+                        <button @click="config.auto_download_scope = 'mc'"
+                            :class="config.auto_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
+                    </div>
+
+                    <label class="text-sm font-medium text-slate-600 block mb-2">手动入库（立即扫描 / 精准补档）</label>
+                    <div class="flex gap-2 mb-2">
+                        <button @click="config.manual_download_scope = 'full'"
+                            :class="config.manual_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
+                        <button @click="config.manual_download_scope = 'mc'"
+                            :class="config.manual_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
+                    </div>
+                    <p class="text-xs text-slate-400">「仅MC环节」过滤分P标题含《》的歌曲环节，仅合并 MC / 拉票 / 生日等特殊环节为一个视频，标题与目录追加「MC合集」。同一视频只入库一次（先到先得）。仅对之后下载的录播生效。</p>
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
@@ -387,7 +416,7 @@
                 
                 const history = ref([]);
                 const activeTasks = ref({});
-                const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, preferred_codec: "av1" });
+                const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, preferred_codec: "av1", auto_download_scope: "full", manual_download_scope: "full" });
                 const scanMessage = ref("");
                 const isScanning = ref(false);
                 const manualUrl = ref("");
@@ -477,6 +506,8 @@
                             data.emby = { server_url: "", api_key: "", library_name: "公演直播回放" };
                         }
                         if (!data.preferred_codec) data.preferred_codec = "av1";
+                        if (!data.auto_download_scope) data.auto_download_scope = "full";
+                        if (!data.manual_download_scope) data.manual_download_scope = "full";
                         config.value = data;
                         scanMessage.value = schedulerStatus.value;
                     } catch (e) { console.error(e); }

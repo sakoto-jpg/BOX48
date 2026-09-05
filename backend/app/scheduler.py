@@ -11,8 +11,20 @@ from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
-from merger import merge_parts, _get_video_codec as get_video_codec
+from merger import merge_parts, is_song_part, _get_video_codec as get_video_codec
 from emby_client import EmbyClient
+
+MC_TITLE_SUFFIX = "MC合集"  # MC模式入库标题/目录后缀；_auto_rewash 靠 path 中该串推断范围，勿改
+
+
+def _select_mc_parts(parts):
+    """过滤歌曲分P，返回 [(原始索引, part), ...]。
+
+    必须保留原始索引：下载分P号(p_number=index+1)必须等于B站原始P号，
+    原地过滤列表会让 enumerate 重编号，导致 playlist_items 下载错误的分P。
+    flat 标题缺失(None)的分P一律保留，下载后由真实标题二次校验。
+    """
+    return [(i, p) for i, p in enumerate(parts) if not is_song_part(p.get('title'))]
 
 class Snh48Scanner:
     def __init__(self, config_path: str, cookie_path: str, base_download_path: str):
@@ -87,11 +99,40 @@ class Snh48Scanner:
             print(f"⚠️ 读取 preferred_codec 配置失败，回退 AVC: {e}", flush=True)
             return 'avc'
 
-    def _probe_av1_availability(self, bvid: str) -> bool:
-        """整场探测：所有分P均提供 AV1 源才返回 True，否则(含探测失败)返回 False。
+    def _get_download_scope(self, kind: str = 'auto') -> str:
+        """读取下载范围配置。kind: 'auto'|'manual'；取值 'full'|'mc'，缺失/非法/异常回退 'full'。"""
+        key = 'auto_download_scope' if kind == 'auto' else 'manual_download_scope'
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                config = yaml.safe_load(f) or {}
+            scope = config.get(key, 'full')
+            return scope if scope in ('full', 'mc') else 'full'
+        except Exception as e:
+            print(f"⚠️ 读取下载范围配置({key})失败，回退整场: {e}", flush=True)
+            return 'full'
 
-        分P合并要求编码一致，混编会导致合并失败，故采用整场判断。
+    def _rewash_flat_opts(self) -> dict:
+        """洗版解析 MC 分P 用的浅层扫描选项(与 scan_and_download 同款)。"""
+        return {
+            'cookiefile': self.cookie_path,
+            'quiet': True,
+            'extract_flat': True,
+            'extractor_retries': 3,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Referer': 'https://www.bilibili.com/'
+            }
+        }
+
+    def _probe_av1_availability(self, bvid: str, p_numbers: List[int] = None) -> bool:
+        """探测指定分P是否均提供 AV1 源，全部提供才返回 True，否则(含探测失败)返回 False。
+
+        p_numbers: 1-based 分P号列表，None 表示探测全部。MC 模式只合并选中的
+        分P，编码一致性只要求在选中集合内，故仅探测选中分P。
+        分P合并要求编码一致，混编会导致合并失败。
         """
+        if p_numbers is not None and not p_numbers:
+            return False
         ydl_opts = {
             'cookiefile': self.cookie_path,
             'quiet': True,
@@ -110,6 +151,8 @@ class Snh48Scanner:
                 return False
             missing_parts = []
             for i, entry in enumerate(entries):
+                if p_numbers is not None and (i + 1) not in p_numbers:
+                    continue
                 if not entry or not any((f.get('vcodec') or '').startswith('av01')
                                         for f in entry.get('formats') or []):
                     missing_parts.append(i + 1)
@@ -152,18 +195,35 @@ class Snh48Scanner:
         return hook
 
     def _process_video_info(self, bvid: str, title: str, video_info: dict, target_team: str, date_str: str, year: str, formatted_date: str,
-                            keep_existing: bool = False):
-        """下载整场公演并入库。keep_existing=True(洗版)时失败回滚不删除原有合并文件。"""
+                            keep_existing: bool = False, scope: str = 'full'):
+        """下载公演并入库。scope: 'full' 整场公演 | 'mc' 仅MC环节(过滤歌曲分P)。
+        keep_existing=True(洗版)时失败回滚不删除原有合并文件。"""
         run_start = time.time()
         parts = video_info.get('entries') if 'entries' in video_info else [video_info]
+        is_mc = (scope == 'mc')
+        print(f"🎯 {bvid} 入库范围: {'仅MC环节' if is_mc else '整场公演'}，共 {len(parts)} 个分P", flush=True)
+
+        # MC 范围：预过滤歌曲分P(flat 标题缺失的分P保留，下载后用真实标题二次校验)。
+        # 过滤必须保留原始索引：下载分P号须等于B站原始P号，否则会下载错分P。
+        if is_mc:
+            selected = _select_mc_parts(parts)
+            if not selected:
+                print(f"⏭️ {bvid} 无MC环节，跳过入库: {title}", flush=True)
+                if bvid in self.active_tasks:
+                    self.active_tasks[bvid]['p_total'] = 0
+                    self.active_tasks[bvid]['status'] = "无MC环节，跳过入库"
+                return
+        else:
+            selected = list(enumerate(parts))
+
         if bvid in self.active_tasks:
-            self.active_tasks[bvid]['p_total'] = len(parts)
+            self.active_tasks[bvid]['p_total'] = len(selected)
             self.active_tasks[bvid]['p_done'] = 0
             self.active_tasks[bvid]['part_progress'] = {}
 
-        # 编码偏好：AV1 优先时先整场探测，确保各分P编码一致、可无损合并
+        # 编码偏好：AV1 优先时先探测(MC 模式仅探测选中分P)，确保参与合并的分P编码一致
         prefer_codec = self._get_preferred_codec()
-        if prefer_codec == 'av01' and not self._probe_av1_availability(bvid):
+        if prefer_codec == 'av01' and not self._probe_av1_availability(bvid, [i + 1 for i, _ in selected]):
             print(f"⚠️ {bvid} 部分分P无 AV1 源，本场回退 H.264(AVC) 编码下载", flush=True)
             prefer_codec = 'avc'
 
@@ -171,11 +231,13 @@ class Snh48Scanner:
         if not overall_plot and parts:
             overall_plot = parts[0].get('description') or ''
 
+        # MC 模式在标题/目录后追加「MC合集」，便于 Emby 与历史记录辨识
+        perf_title = f"{title} {MC_TITLE_SUFFIX}" if is_mc else title
         base_episode_path = self.nfo_builder.build_metadata(
             team_name=target_team,
             year=year,
             date_str=formatted_date,
-            perf_title=title,
+            perf_title=perf_title,
             plot=overall_plot
         )
 
@@ -205,10 +267,10 @@ class Snh48Scanner:
         raw_results = []
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = []
-            for index, part in enumerate(parts):
+            for index, part in selected:
                 if stop_flag.is_set():
                     break
-                if index > 0:
+                if len(futures) > 0:
                     time.sleep(0.8)
                 futures.append(executor.submit(_download_one, index, part))
 
@@ -223,6 +285,15 @@ class Snh48Scanner:
             if success:
                 success_count += 1
                 mkv_file = f"{output_path}.mkv"
+                if is_mc and is_song_part(real_title):
+                    # 二次校验：flat 标题缺失/误判的歌曲分P在此剔除，不参与合并
+                    print(f"🧹 MC范围过滤: P{p_number} 为歌曲环节，删除", flush=True)
+                    for f in (mkv_file, f"{output_path}.danmaku.xml", f"{output_path}.nfo"):
+                        try:
+                            os.remove(f)
+                        except OSError:
+                            pass
+                    continue
                 if os.path.exists(mkv_file):
                     part_files.append(mkv_file)
                     part_titles.append(real_title)
@@ -230,7 +301,7 @@ class Snh48Scanner:
                 print(f"❌ P{p_number} 死磕失败，触发数据完整性保护，中断后续分P下载...", flush=True)
                 break
 
-        if success_count == len(parts):
+        if success_count == len(selected) and part_files:
             # --- 多分P合并为完整视频 + 写入章节 ---
             if len(part_files) >= 2:
                 if bvid in self.active_tasks:
@@ -259,7 +330,7 @@ class Snh48Scanner:
             # 记录入库编码与最终文件路径（供前端展示与自动洗版使用）
             final_path = f"{base_episode_path}.mkv"
             codec = get_video_codec(final_path)
-            self._mark_downloaded(bvid, title, codec, final_path)
+            self._mark_downloaded(bvid, perf_title, codec, final_path)
             try:
                 import requests as req_lib
                 with open(self.config_path, 'r', encoding='utf-8') as f:
@@ -269,13 +340,13 @@ class Snh48Scanner:
                         codec_label = {'av1': 'AV1', 'h264': 'H.264', 'hevc': 'HEVC'}.get(codec, codec.upper())
                         payload = {
                             "title": "[SNH48-DownLoader] 洗版完成",
-                            "body": f"【{title}】\n已重新下载并替换为 {codec_label} 编码，前往 Emby 观看！",
+                            "body": f"【{perf_title}】\n已重新下载并替换为 {codec_label} 编码，前往 Emby 观看！",
                             "type": "success"
                         }
                     else:
                         payload = {
-                            "title": "[SNH48-DownLoader] 录播入库完成",
-                            "body": f"【{title}】\n已成功下载并刮削，前往 Emby 观看！",
+                            "title": "[SNH48-DownLoader] MC合集入库完成" if is_mc else "[SNH48-DownLoader] 录播入库完成",
+                            "body": f"【{perf_title}】\n已成功下载{'仅MC环节' if is_mc else '完整录播'}并刮削，前往 Emby 观看！",
                             "type": "success"
                         }
                     req_lib.post(apprise_url, json=payload, timeout=5)
@@ -292,6 +363,10 @@ class Snh48Scanner:
             if bvid in self.active_tasks:
                 del self.active_tasks[bvid]
         else:
+            # MC模式二次校验后一个分P都不剩：下载本身成功，但全部被识别为歌曲环节
+            mc_skip = is_mc and success_count == len(selected) and not part_files
+            if mc_skip:
+                print(f"⏭️ {bvid} 下载完成但均为歌曲环节，无MC环节，跳过入库: {perf_title}", flush=True)
             if keep_existing:
                 # 洗版失败：仅清理本次运行产生的分P/临时文件，保留原有合并文件与字幕
                 print(f"🧹 洗版失败回滚：仅清理本次分P文件，保留原有文件", flush=True)
@@ -303,7 +378,7 @@ class Snh48Scanner:
                         except OSError:
                             pass
                 if bvid in self.active_tasks:
-                    self.active_tasks[bvid]['status'] = "洗版失败，保留原文件"
+                    self.active_tasks[bvid]['status'] = "无MC环节，跳过入库" if mc_skip else "洗版失败，保留原文件"
             else:
                 print(f"🗑️ 触发物理回滚，清理不完整的公演数据目录: {perf_dir}", flush=True)
                 try:
@@ -313,9 +388,9 @@ class Snh48Scanner:
                     print(f"⚠️ 清理脏数据失败: {e}", flush=True)
 
                 if bvid in self.active_tasks:
-                    self.active_tasks[bvid]['status'] = "残缺失败，已回滚清理"
+                    self.active_tasks[bvid]['status'] = "无MC环节，跳过入库" if mc_skip else "残缺失败，已回滚清理"
 
-    def scan_and_download(self, space_url=""):
+    def scan_and_download(self, space_url="", scope: str = 'full'):
         if "/video" not in space_url:
             space_url = space_url.rstrip('/') + "/video"
             
@@ -377,7 +452,7 @@ class Snh48Scanner:
                             self.active_tasks[bvid] = {
                                 "title": title, "status": "准备下载...", "progress": "0%", "p_current": 0, "p_total": "?"
                             }
-                            self._process_video_info(bvid, title, v_info, target_team, date_str, year, formatted_date)
+                            self._process_video_info(bvid, title, v_info, target_team, date_str, year, formatted_date, scope=scope)
                         else:
                             print(f"⏭️ 忽略不匹配内容: {title}", flush=True)
                         break 
@@ -389,7 +464,7 @@ class Snh48Scanner:
                     else:
                         print(f"❌ 解析详情彻底失败 {bvid}", flush=True)
 
-    def _process_bvid(self, bvid: str, keep_existing: bool = False) -> bool:
+    def _process_bvid(self, bvid: str, keep_existing: bool = False, scope: str = 'full') -> bool:
         """解析 bvid → 匹配团队/日期 → 下载入库。手动补档与自动洗版共用。
 
         调用前需保证 active_tasks[bvid] 已存在(用于进度展示)。
@@ -422,7 +497,7 @@ class Snh48Scanner:
                     if target_team and date_str and re.match(r'^\d{8}$', date_str):
                         self._process_video_info(bvid, title, v_info, target_team, date_str,
                                                  date_str[:4], f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}",
-                                                 keep_existing=keep_existing)
+                                                 keep_existing=keep_existing, scope=scope)
                     else:
                         self.active_tasks[bvid]['status'] = "不符合入库规则"
                     return True
@@ -444,7 +519,8 @@ class Snh48Scanner:
         bvid = bvid_match.group(1)
 
         self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
-        self._process_bvid(bvid)
+        scope = self._get_download_scope('manual')   # 手动补档跟随「手动入库」下载范围设置
+        self._process_bvid(bvid, scope=scope)
 
     def _auto_rewash(self):
         """自动洗版：检查最近入库的 2 场公演(按 bvid 去重)，
@@ -486,20 +562,37 @@ class Snh48Scanner:
             if time.time() - self._wash_failed.get(bvid, 0) < 24 * 3600:
                 continue   # 24h 冷却，防反复重下
 
+            # 由入库路径推断该场下载范围，避免把 MC合集 洗成整场版或反之
+            scope = 'mc' if MC_TITLE_SUFFIX in path else 'full'
+
             actual = get_video_codec(path)
             if not actual:
                 continue
             if actual == target_codec:
                 print(f"  ✓ 洗版检查 {bvid}: 文件已是 {actual}，无需洗版", flush=True)
                 continue
-            if target_codec == 'av1' and not self._probe_av1_availability(bvid):
-                print(f"  ⏭️ 洗版暂缓 {bvid}: B 站尚无 AV1 源，待下轮扫描重试", flush=True)
-                continue
+            if target_codec == 'av1':
+                probe_nums = None
+                if scope == 'mc':
+                    # MC 场次只探测被选中的 MC 分P，否则某首歌曲分P无 AV1 会导致永远无法洗版
+                    try:
+                        with yt_dlp.YoutubeDL(self._rewash_flat_opts()) as ydl:
+                            info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
+                        selected = _select_mc_parts(info.get('entries') or [])
+                        if not selected:
+                            print(f"  ⏭️ 洗版暂缓 {bvid}: 无MC分P", flush=True)
+                            continue
+                        probe_nums = [i + 1 for i, _ in selected]
+                    except Exception as e:
+                        print(f"⚠️ 洗版 MC 分P解析失败，退回整场探测: {e}", flush=True)
+                if not self._probe_av1_availability(bvid, probe_nums):
+                    print(f"  ⏭️ 洗版暂缓 {bvid}: B 站尚无 AV1 源，待下轮扫描重试", flush=True)
+                    continue
 
             print(f"🔄 洗版启动: {bvid} [{codec} → {target_codec}] {title}", flush=True)
             self.active_tasks[bvid] = {"title": title, "status": "洗版下载中...", "progress": "0%", "p_current": 0, "p_total": "?"}
             try:
-                self._process_bvid(bvid, keep_existing=True)
+                self._process_bvid(bvid, keep_existing=True, scope=scope)
                 new_codec = get_video_codec(path) if os.path.exists(path) else ''
                 if new_codec != target_codec:
                     # 下载失败且原文件被保留：进入冷却，下轮扫描再评估
@@ -511,10 +604,14 @@ class Snh48Scanner:
                 self._wash_failed[bvid] = time.time()
                 print(f"⚠️ 洗版异常 {bvid}: {e}", flush=True)
 
-    def scan_all(self):
+    def scan_all(self, manual: bool = False):
+        # 定时调度走「自动入库」设置；前端手动触发(manual=True)走「手动入库」设置
+        scope = self._get_download_scope('manual' if manual else 'auto')
+        scope_label = '仅MC环节' if scope == 'mc' else '整场公演'
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 全局扫描开始，下载范围: {scope_label}", flush=True)
         with open(self.config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
         for sub in data.get('subscriptions', []):
-            self.scan_and_download(sub.get('url'))
+            self.scan_and_download(sub.get('url'), scope=scope)
         # 扫描结束后自动洗版：独立线程运行，不阻塞后续定时扫描(下载耗时较长)
         threading.Thread(target=self._auto_rewash, daemon=True).start()

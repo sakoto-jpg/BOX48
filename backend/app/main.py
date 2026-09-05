@@ -263,7 +263,8 @@ def read_root():
 
 @app.post("/api/trigger_scan")
 def trigger_scan_manually(background_tasks: BackgroundTasks):
-    background_tasks.add_task(scanner.scan_all)
+    # 前端手动触发的扫描跟随「手动入库」下载范围设置（仅MC环节/整场公演）
+    background_tasks.add_task(scanner.scan_all, True)
     return {"message": "已在后台触发全局扫描任务"}
 
 @app.get("/api/config")
