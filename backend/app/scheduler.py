@@ -335,6 +335,12 @@ class Snh48Scanner:
 
             # 记录入库编码与最终文件路径（供前端展示与自动洗版使用）
             final_path = f"{base_episode_path}.mkv"
+            if not os.path.exists(final_path):
+                # 合并失败/最终文件缺失时不写成功历史，避免产生“有记录无文件”的幽灵条目
+                print(f"⚠️ 最终文件不存在，取消入库登记: {final_path}", flush=True)
+                if bvid in self.active_tasks:
+                    self.active_tasks[bvid]['status'] = "洗版失败，保留原文件" if keep_existing else "合并失败，未入库"
+                return
             codec = get_video_codec(final_path)
             self._mark_downloaded(bvid, perf_title, codec, final_path)
             try:
