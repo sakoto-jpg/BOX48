@@ -78,8 +78,14 @@ class Snh48Scanner:
         with open(self.history_file, 'a', encoding='utf-8') as f:
             f.write(f"{bvid}|{title}|{codec}|{path}\n")
 
-    def _match_team(self, title: str) -> str:
-        for team_name, team_data in self.nfo_builder.roster.items():
+    def _match_team(self, title: str, include_disabled: bool = False) -> str:
+        """匹配标题所属队伍。
+        include_disabled=True 时也匹配未开启自动入库的队伍（手动入库场景），
+        False 时仅匹配已启用队伍（自动入库/自动洗版场景）。"""
+        roster = self.nfo_builder.roster
+        if include_disabled:
+            roster = self.nfo_builder._load_roster(self.config_path, enabled_only=False)
+        for team_name, team_data in roster.items():
             keywords = team_data.get("keywords", [])
             for kw in keywords:
                 if kw.upper() == "NII" and "NIII" in title.upper():
@@ -390,7 +396,10 @@ class Snh48Scanner:
                 if bvid in self.active_tasks:
                     self.active_tasks[bvid]['status'] = "无MC环节，跳过入库" if mc_skip else "残缺失败，已回滚清理"
 
-    def scan_and_download(self, space_url="", scope: str = 'full'):
+    def scan_and_download(self, space_url="", scope: str = 'full', include_disabled: bool = False):
+        """扫描某 UP 主新投稿并入库。
+        include_disabled=True 表示手动扫描：允许匹配未开启自动入库的队伍；
+        False 表示自动扫描：只匹配已启用队伍。"""
         if "/video" not in space_url:
             space_url = space_url.rstrip('/') + "/video"
             
@@ -438,7 +447,7 @@ class Snh48Scanner:
                     with yt_dlp.YoutubeDL(ydl_opts_full) as ydl_full:
                         v_info = ydl_full.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
                         title = v_info.get('title', '')
-                        target_team = self._match_team(title)
+                        target_team = self._match_team(title, include_disabled=include_disabled)
                         date_match = re.search(r'202\d{5}', title)
                         if date_match:
                             date_str = date_match.group()
@@ -464,7 +473,7 @@ class Snh48Scanner:
                     else:
                         print(f"❌ 解析详情彻底失败 {bvid}", flush=True)
 
-    def _process_bvid(self, bvid: str, keep_existing: bool = False, scope: str = 'full') -> bool:
+    def _process_bvid(self, bvid: str, keep_existing: bool = False, scope: str = 'full', include_disabled: bool = False) -> bool:
         """解析 bvid → 匹配团队/日期 → 下载入库。手动补档与自动洗版共用。
 
         调用前需保证 active_tasks[bvid] 已存在(用于进度展示)。
@@ -487,7 +496,7 @@ class Snh48Scanner:
                     v_info = ydl_full.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
                     title = v_info.get('title', '')
                     self.active_tasks[bvid]['title'] = title
-                    target_team = self._match_team(title)
+                    target_team = self._match_team(title, include_disabled=include_disabled)
                     date_match = re.search(r'202\d{5}', title)
                     if date_match:
                         date_str = date_match.group()
@@ -520,7 +529,8 @@ class Snh48Scanner:
 
         self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
         scope = self._get_download_scope('manual')   # 手动补档跟随「手动入库」下载范围设置
-        self._process_bvid(bvid, scope=scope)
+        # 精准补档属于手动入库：允许匹配未开启自动入库的队伍
+        self._process_bvid(bvid, scope=scope, include_disabled=True)
 
     def _auto_rewash(self):
         """自动洗版：检查最近入库的 2 场公演(按 bvid 去重)，
@@ -589,6 +599,11 @@ class Snh48Scanner:
                     print(f"  ⏭️ 洗版暂缓 {bvid}: B 站尚无 AV1 源，待下轮扫描重试", flush=True)
                     continue
 
+            if not self._match_team(title):
+                # 该场次所属队伍未开启自动入库(如手动补档的特殊公演)，不做自动洗版
+                print(f"  ⏭️ 洗版跳过 {bvid}: 队伍未开启自动入库，保留手动入库结果", flush=True)
+                continue
+
             print(f"🔄 洗版启动: {bvid} [{codec} → {target_codec}] {title}", flush=True)
             self.active_tasks[bvid] = {"title": title, "status": "洗版下载中...", "progress": "0%", "p_current": 0, "p_total": "?"}
             try:
@@ -612,6 +627,7 @@ class Snh48Scanner:
         with open(self.config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
         for sub in data.get('subscriptions', []):
-            self.scan_and_download(sub.get('url'), scope=scope)
+            # 手动扫描也允许匹配未启用队伍；定时自动扫描仍只处理启用队伍
+            self.scan_and_download(sub.get('url'), scope=scope, include_disabled=manual)
         # 扫描结束后自动洗版：独立线程运行，不阻塞后续定时扫描(下载耗时较长)
         threading.Thread(target=self._auto_rewash, daemon=True).start()

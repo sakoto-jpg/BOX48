@@ -10,7 +10,7 @@ class NfoBuilder:
         self.roster = self._load_roster(config_path)
         self.performances = self._load_performances(config_path)
 
-    def _load_roster(self, config_path: str) -> dict:
+    def _load_roster(self, config_path: str, enabled_only: bool = True) -> dict:
         if not os.path.exists(config_path): return {}
         with open(config_path, 'r', encoding='utf-8') as f:
             data = yaml.safe_load(f)
@@ -18,11 +18,12 @@ class NfoBuilder:
         roster_dict = {}
         if data and 'teams' in data:
             for team in data['teams']:
-                if team.get('enabled', False):
-                    roster_dict[team['name']] = {
-                        "members": team.get('members', []),
-                        "keywords": team.get('keywords', [team['name']])
-                    }
+                if enabled_only and not team.get('enabled', False):
+                    continue
+                roster_dict[team['name']] = {
+                    "members": team.get('members', []),
+                    "keywords": team.get('keywords', [team['name']])
+                }
         return roster_dict
 
     def _load_performances(self, config_path: str) -> list:
