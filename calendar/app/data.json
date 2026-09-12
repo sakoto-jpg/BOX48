@@ -1,0 +1,1154 @@
+{
+    "8053": {
+        "id": "8053",
+        "date": "5月24日",
+        "show_time": "18:30",
+        "title": "5月24日 SNH48星梦剧院 S队 四月乐曜曲首演",
+        "link": "https://shop.48.cn/tickets/item/8053",
+        "fetch_time": "2026-05-31",
+        "team": "s"
+    },
+    "8051": {
+        "id": "8051",
+        "date": "5月23日",
+        "show_time": "18:30",
+        "title": "5月23日 SNH48星梦剧院 S队 田姝丽季度MVP",
+        "link": "https://shop.48.cn/tickets/item/8051",
+        "fetch_time": "2026-05-31",
+        "team": "s"
+    },
+    "8050": {
+        "id": "8050",
+        "date": "5月23日",
+        "show_time": "13:30",
+        "title": "5月23日 SNH48星梦剧院 H队 梁怀方生日公演",
+        "link": "https://shop.48.cn/tickets/item/8050",
+        "fetch_time": "2026-05-31",
+        "team": "h"
+    },
+    "8049": {
+        "id": "8049",
+        "date": "5月22日",
+        "show_time": "19:30",
+        "title": "5月22日 SNH48星梦剧院 X队 Team X《Fire X》",
+        "link": "https://shop.48.cn/tickets/item/8049",
+        "fetch_time": "2026-05-31",
+        "team": "x"
+    },
+    "8048": {
+        "id": "8048",
+        "date": "5月21日",
+        "show_time": "19:30",
+        "title": "5月21日 SNH48星梦剧院 H队 Team HII《赫兹共振》",
+        "link": "https://shop.48.cn/tickets/item/8048",
+        "fetch_time": "2026-05-31",
+        "team": "h"
+    },
+    "8046": {
+        "id": "8046",
+        "date": "5月20日",
+        "show_time": "19:30",
+        "title": "5月20日 SNH48星梦剧院 YBS 锋芒尽绽晋级赛",
+        "link": "https://shop.48.cn/tickets/item/8046",
+        "fetch_time": "2026-05-31",
+        "team": "ybs"
+    },
+    "8024": {
+        "id": "8024",
+        "date": "5月17日",
+        "show_time": "18:30",
+        "title": "5月17日 SNH48星梦剧院 X队 Team X《Fire X》",
+        "link": "https://shop.48.cn/tickets/item/8024",
+        "fetch_time": "2026-05-31",
+        "team": "x"
+    },
+    "8023": {
+        "id": "8023",
+        "date": "5月17日",
+        "show_time": "13:30",
+        "title": "5月17日 SNH48星梦剧院 N队 Team NII《Nice to meet you II》",
+        "link": "https://shop.48.cn/tickets/item/8023",
+        "fetch_time": "2026-05-31",
+        "team": "n"
+    },
+    "8021": {
+        "id": "8021",
+        "date": "5月16日",
+        "show_time": "13:30",
+        "title": "5月16日 SNH48星梦剧院 S队 Team S《INTO THE LIGHT》",
+        "link": "https://shop.48.cn/tickets/item/8021",
+        "fetch_time": "2026-05-31",
+        "team": "s"
+    },
+    "8020": {
+        "id": "8020",
+        "date": "5月15日",
+        "show_time": "19:30",
+        "title": "5月15日 SNH48星梦剧院 YBS 《1&1 Anyone》",
+        "link": "https://shop.48.cn/tickets/item/8020",
+        "fetch_time": "2026-05-31",
+        "team": "ybs"
+    },
+    "8019": {
+        "id": "8019",
+        "date": "5月14日",
+        "show_time": "19:30",
+        "title": "5月14日 SNH48星梦剧院 N队 Team NII《Nice to meet you II》",
+        "link": "https://shop.48.cn/tickets/item/8019",
+        "fetch_time": "2026-05-31",
+        "team": "n"
+    },
+    "8073": {
+        "id": "8073",
+        "date": "5月31日",
+        "show_time": "18:30",
+        "title": "5月31日 SNH48星梦剧院 X队 作品展演：金泓言、刘小涵、李子忻",
+        "link": "https://shop.48.cn/tickets/item/8073",
+        "team": "x",
+        "fetch_time": "2026-05-31"
+    },
+    "8072": {
+        "id": "8072",
+        "date": "5月31日",
+        "show_time": "13:30",
+        "title": "5月31日 SNH48星梦剧院 S队 芦馨怡生日环节",
+        "link": "https://shop.48.cn/tickets/item/8072",
+        "team": "s",
+        "fetch_time": "2026-05-31"
+    },
+    "8071": {
+        "id": "8071",
+        "date": "5月30日",
+        "show_time": "18:30",
+        "title": "5月30日 SNH48星梦剧院 H队 陈俞希生日环节及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8071",
+        "team": "h",
+        "fetch_time": "2026-05-31"
+    },
+    "8070": {
+        "id": "8070",
+        "date": "5月30日",
+        "show_time": "13:30",
+        "title": "5月30日 SNH48星梦剧院 N队 钟亚男季度MVP公演",
+        "link": "https://shop.48.cn/tickets/item/8070",
+        "team": "n",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-29-1930-x": {
+        "id": "api-2026-05-29-1930-x",
+        "date": "5月29日",
+        "show_time": "19:30",
+        "title": "5月29日 SNH48星梦剧院 X队 《Fire X》2.0首演",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-05-31"
+    },
+    "8068": {
+        "id": "8068",
+        "date": "5月28日",
+        "show_time": "19:30",
+        "title": "5月28日 SNH48星梦剧院 N队 Team NII《Nice to meet you II》",
+        "link": "https://shop.48.cn/tickets/item/8068",
+        "team": "n",
+        "fetch_time": "2026-05-31"
+    },
+    "8067": {
+        "id": "8067",
+        "date": "5月27日",
+        "show_time": "19:30",
+        "title": "5月27日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8067",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-24-1330-n": {
+        "id": "api-2026-05-24-1330-n",
+        "date": "5月24日",
+        "show_time": "13:30",
+        "title": "5月24日 SNH48星梦剧院 N队 柏欣妤季度MVP",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-16-1830-h": {
+        "id": "api-2026-05-16-1830-h",
+        "date": "5月16日",
+        "show_time": "18:30",
+        "title": "5月16日 SNH48星梦剧院 H队 林舒晴《茉莉雨》生日公演",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-13-1930-def": {
+        "id": "api-2026-05-13-1930-def",
+        "date": "5月13日",
+        "show_time": "19:30",
+        "title": "5月13日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-10-1830-h": {
+        "id": "api-2026-05-10-1830-h",
+        "date": "5月10日",
+        "show_time": "18:30",
+        "title": "5月10日 SNH48星梦剧院 H队 Team HII《赫兹共振》",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-10-1330-s": {
+        "id": "api-2026-05-10-1330-s",
+        "date": "5月10日",
+        "show_time": "13:30",
+        "title": "5月10日 SNH48星梦剧院 S队 杨心渝生日环节",
+        "link": "",
+        "team": "s",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-09-1930-def": {
+        "id": "api-2026-05-09-1930-def",
+        "date": "5月9日",
+        "show_time": "19:30",
+        "title": "5月9日 SNH48星梦剧院 YBS 初芒新序",
+        "link": "",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-08-1930-x": {
+        "id": "api-2026-05-08-1930-x",
+        "date": "5月8日",
+        "show_time": "19:30",
+        "title": "5月8日 SNH48星梦剧院 X队 Team X《Fire X》",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-05-1830-def": {
+        "id": "api-2026-05-05-1830-def",
+        "date": "5月5日",
+        "show_time": "18:30",
+        "title": "5月5日 SNH48星梦剧院 YBS 《 1&1 Anyone》首演第二场",
+        "link": "",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-05-1330-n": {
+        "id": "api-2026-05-05-1330-n",
+        "date": "5月5日",
+        "show_time": "13:30",
+        "title": "5月5日 SNH48星梦剧院 N队 Team NII《Nice to meet you II》",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-04-1830-def": {
+        "id": "api-2026-05-04-1830-def",
+        "date": "5月4日",
+        "show_time": "18:30",
+        "title": "5月4日 SNH48星梦剧院 YBS 《 1&1 Anyone》首演第一场",
+        "link": "",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-03-1830-n": {
+        "id": "api-2026-05-03-1830-n",
+        "date": "5月3日",
+        "show_time": "18:30",
+        "title": "5月3日 SNH48星梦剧院 N队 Team NII《Nice to meet you II》",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-03-1330-x": {
+        "id": "api-2026-05-03-1330-x",
+        "date": "5月3日",
+        "show_time": "13:30",
+        "title": "5月3日 SNH48星梦剧院 X队 杨秋野生日公演",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-02-1830-s": {
+        "id": "api-2026-05-02-1830-s",
+        "date": "5月2日",
+        "show_time": "18:30",
+        "title": "5月2日 SNH48星梦剧院 S队 宁轲生日公演",
+        "link": "",
+        "team": "s",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-02-1330-h": {
+        "id": "api-2026-05-02-1330-h",
+        "date": "5月2日",
+        "show_time": "13:30",
+        "title": "5月2日 SNH48星梦剧院 H队 Team HII《赫兹共振》",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-05-31"
+    },
+    "api-2026-05-01-1830-def": {
+        "id": "api-2026-05-01-1830-def",
+        "date": "5月1日",
+        "show_time": "18:30",
+        "title": "5月1日 SNH48星梦剧院 YBS 24期新生《心的旅程》首秀场",
+        "link": "",
+        "team": "ybs",
+        "fetch_time": "2026-05-31"
+    },
+    "8096": {
+        "id": "8096",
+        "date": "6月7日",
+        "show_time": "18:30",
+        "title": "6月7日 SNH48星梦剧院 N队 作品展演：黄紫怡、徐佳琳",
+        "link": "https://shop.48.cn/tickets/item/8096",
+        "team": "n",
+        "fetch_time": "2026-06-30"
+    },
+    "8094": {
+        "id": "8094",
+        "date": "6月7日",
+        "show_time": "13:30",
+        "title": "6月7日 SNH48星梦剧院 S队 张雷雷生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8094",
+        "team": "s",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-06-1830-x": {
+        "id": "api-2026-06-06-1830-x",
+        "date": "6月6日",
+        "show_time": "18:30",
+        "title": "6月6日 SNH48星梦剧院 X队 禹佳蔚生日公演",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-06-1330-h": {
+        "id": "api-2026-06-06-1330-h",
+        "date": "6月6日",
+        "show_time": "13:30",
+        "title": "6月6日 SNH48星梦剧院 H队 李佳恩生日公演及作品展演",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-06-30"
+    },
+    "8091": {
+        "id": "8091",
+        "date": "6月5日",
+        "show_time": "19:30",
+        "title": "6月5日 SNH48星梦剧院 S队 作品展演：蒋夏羽、刘婧阳、李婷",
+        "link": "https://shop.48.cn/tickets/item/8091",
+        "team": "s",
+        "fetch_time": "2026-06-30"
+    },
+    "8090": {
+        "id": "8090",
+        "date": "6月4日",
+        "show_time": "19:30",
+        "title": "6月4日 SNH48星梦剧院 H队 作品展演：陈嘉仪、覃柯蒙、刘思雨",
+        "link": "https://shop.48.cn/tickets/item/8090",
+        "team": "h",
+        "fetch_time": "2026-06-30"
+    },
+    "8089": {
+        "id": "8089",
+        "date": "6月3日",
+        "show_time": "19:30",
+        "title": "6月3日 SNH48星梦剧院 YBS 作品展演：丁小凡、韩云伊、黄子欣",
+        "link": "https://shop.48.cn/tickets/item/8089",
+        "team": "ybs",
+        "fetch_time": "2026-06-30"
+    },
+    "8116": {
+        "id": "8116",
+        "date": "6月14日",
+        "show_time": "18:30",
+        "title": "6月14日 SNH48星梦剧院 S队 作品展演：盛乐、刘诗彤",
+        "link": "https://shop.48.cn/tickets/item/8116",
+        "team": "s",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-14-1330-h": {
+        "id": "api-2026-06-14-1330-h",
+        "date": "6月14日",
+        "show_time": "13:30",
+        "title": "6月14日 SNH48星梦剧院 H队 《赫兹共振》2.0首演",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-06-30"
+    },
+    "8114": {
+        "id": "8114",
+        "date": "6月13日",
+        "show_time": "18:30",
+        "title": "6月13日 SNH48星梦剧院 GII TEAM GII《手牵手》",
+        "link": "https://shop.48.cn/tickets/item/8114",
+        "team": "gii",
+        "fetch_time": "2026-06-30"
+    },
+    "8113": {
+        "id": "8113",
+        "date": "6月13日",
+        "show_time": "13:30",
+        "title": "6月13日 SNH48星梦剧院 TEAM C《第一人称》",
+        "link": "https://shop.48.cn/tickets/item/8113",
+        "team": "c",
+        "fetch_time": "2026-06-30"
+    },
+    "8112": {
+        "id": "8112",
+        "date": "6月12日",
+        "show_time": "19:30",
+        "title": "6月12日 SNH48星梦剧院 N队 作品展演：沈馨、唐程成",
+        "link": "https://shop.48.cn/tickets/item/8112",
+        "team": "n",
+        "fetch_time": "2026-06-30"
+    },
+    "8111": {
+        "id": "8111",
+        "date": "6月11日",
+        "show_time": "19:30",
+        "title": "6月11日 SNH48星梦剧院 YBS 作品展演：黄子珊、吉雅楠、刘钇霏",
+        "link": "https://shop.48.cn/tickets/item/8111",
+        "team": "ybs",
+        "fetch_time": "2026-06-30"
+    },
+    "8110": {
+        "id": "8110",
+        "date": "6月10日",
+        "show_time": "19:30",
+        "title": "6月10日 SNH48星梦剧院 X队 作品展演：钟郭菲杨",
+        "link": "https://shop.48.cn/tickets/item/8110",
+        "team": "x",
+        "fetch_time": "2026-06-30"
+    },
+    "8136": {
+        "id": "8136",
+        "date": "6月21日",
+        "show_time": "18:30",
+        "title": "6月21日 SNH48星梦剧院 H队 年度青春盛典第一阶段入围结果公布",
+        "link": "https://shop.48.cn/tickets/item/8136",
+        "team": "h",
+        "fetch_time": "2026-06-30"
+    },
+    "8135": {
+        "id": "8135",
+        "date": "6月21日",
+        "show_time": "13:30",
+        "title": "6月21日 SNH48星梦剧院 S队 张倩生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8135",
+        "team": "s",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-20-1830-x": {
+        "id": "api-2026-06-20-1830-x",
+        "date": "6月20日",
+        "show_time": "18:30",
+        "title": "6月20日 SNH48星梦剧院 X队 作品展演：蒋欣洳、熊紫轶",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-06-30"
+    },
+    "8133": {
+        "id": "8133",
+        "date": "6月20日",
+        "show_time": "13:30",
+        "title": "6月20日 SNH48星梦剧院 N队 潘瑛琪生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8133",
+        "team": "n",
+        "fetch_time": "2026-06-30"
+    },
+    "8131": {
+        "id": "8131",
+        "date": "6月19日",
+        "show_time": "18:30",
+        "title": "6月19日 SNH48星梦剧院 YBS 作品展演：杨宝君、臧文萱",
+        "link": "https://shop.48.cn/tickets/item/8131",
+        "team": "ybs",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-19-1330-h": {
+        "id": "api-2026-06-19-1330-h",
+        "date": "6月19日",
+        "show_time": "13:30",
+        "title": "6月19日 SNH48星梦剧院 H队 作品展演：尤可莹、应籽言、郑柯炜",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-06-30"
+    },
+    "8129": {
+        "id": "8129",
+        "date": "6月18日",
+        "show_time": "19:30",
+        "title": "6月18日 SNH48星梦剧院 YBS 作品展演：何绮多、秦箐忆",
+        "link": "https://shop.48.cn/tickets/item/8129",
+        "team": "ybs",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-27-1830-n": {
+        "id": "api-2026-06-27-1830-n",
+        "date": "6月27日",
+        "show_time": "18:30",
+        "title": "6月27日 SNH48星梦剧院 N队 全新原创公演《肆时墟》首演",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-06-30"
+    },
+    "8158": {
+        "id": "8158",
+        "date": "6月27日",
+        "show_time": "13:30",
+        "title": "6月27日 SNH48星梦剧院 S队 周童玥生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8158",
+        "team": "s",
+        "fetch_time": "2026-06-30"
+    },
+    "8157": {
+        "id": "8157",
+        "date": "6月26日",
+        "show_time": "19:30",
+        "title": "6月26日 SNH48星梦剧院 YBS 作品展演：李沁洁、曾雪婷",
+        "link": "https://shop.48.cn/tickets/item/8157",
+        "team": "ybs",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-28-1830-n": {
+        "id": "api-2026-06-28-1830-n",
+        "date": "6月28日",
+        "show_time": "18:30",
+        "title": "6月28日 SNH48星梦剧院 N队 全新原创公演《肆时墟》首演第二场",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-06-30"
+    },
+    "api-2026-06-28-1330-x": {
+        "id": "api-2026-06-28-1330-x",
+        "date": "6月28日",
+        "show_time": "13:30",
+        "title": "6月28日 SNH48星梦剧院 X队 作品展演：曾昕妍、杨秋野、禹佳蔚",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-06-30"
+    },
+    "8182": {
+        "id": "8182",
+        "date": "7月5日",
+        "show_time": "18:30",
+        "title": "7月5日 SNH48星梦剧院 H队 康楚翊生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8182",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8181": {
+        "id": "8181",
+        "date": "7月5日",
+        "show_time": "13:30",
+        "title": "7月5日 SNH48星梦剧院 X队 闫娜生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8181",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-04-1830-h": {
+        "id": "api-2026-07-04-1830-h",
+        "date": "7月4日",
+        "show_time": "18:30",
+        "title": "7月4日 SNH48星梦剧院 H队 蒋舒婷《瞬息蹄宇宙》定制生日会",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8179": {
+        "id": "8179",
+        "date": "7月4日",
+        "show_time": "13:30",
+        "title": "7月4日 SNH48星梦剧院 X队 陈琳生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8179",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "8178": {
+        "id": "8178",
+        "date": "7月3日",
+        "show_time": "19:30",
+        "title": "7月3日 SNH48星梦剧院 S队 作品展演：曹可甜、闫明筠、杨心渝",
+        "link": "https://shop.48.cn/tickets/item/8178",
+        "team": "s",
+        "fetch_time": "2026-07-31"
+    },
+    "8177": {
+        "id": "8177",
+        "date": "7月2日",
+        "show_time": "19:30",
+        "title": "7月2日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8177",
+        "team": "ybs",
+        "fetch_time": "2026-07-31"
+    },
+    "8202": {
+        "id": "8202",
+        "date": "7月12日",
+        "show_time": "18:30",
+        "title": "7月12日 SNH48星梦剧院 H队 阙佳慧生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8202",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8201": {
+        "id": "8201",
+        "date": "7月12日",
+        "show_time": "13:30",
+        "title": "7月12日 SNH48星梦剧院 N队 叶凡生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8201",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-11-1830-n": {
+        "id": "api-2026-07-11-1830-n",
+        "date": "7月11日",
+        "show_time": "18:30",
+        "title": "7月11日 SNH48星梦剧院 N队 胡晓慧《一小部分我》主题生日公演及作品展演",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "8199": {
+        "id": "8199",
+        "date": "7月11日",
+        "show_time": "13:30",
+        "title": "7月11日 SNH48星梦剧院 X队 林佳怡生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8199",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "8198": {
+        "id": "8198",
+        "date": "7月10日",
+        "show_time": "19:30",
+        "title": "7月10日 SNH48星梦剧院 X队 作品展演：杨晔、杨冰怡、王睿琦；杨晔5月乐曜曲首演",
+        "link": "https://shop.48.cn/tickets/item/8198",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "8197": {
+        "id": "8197",
+        "date": "7月9日",
+        "show_time": "19:30",
+        "title": "7月9日 SNH48星梦剧院 S队 作品展演：柳雨呈、芦馨怡、宁轲",
+        "link": "https://shop.48.cn/tickets/item/8197",
+        "team": "s",
+        "fetch_time": "2026-07-31"
+    },
+    "8225": {
+        "id": "8225",
+        "date": "7月19日",
+        "show_time": "18:30",
+        "title": "7月19日 SNH48星梦剧院 H队 李佳恩季度MVP",
+        "link": "https://shop.48.cn/tickets/item/8225",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8224": {
+        "id": "8224",
+        "date": "7月19日",
+        "show_time": "13:30",
+        "title": "7月19日 SNH48星梦剧院 N队 钟亚男生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8224",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "8223": {
+        "id": "8223",
+        "date": "7月18日",
+        "show_time": "18:30",
+        "title": "7月18日 SNH48星梦剧院 H队 龚晨美生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8223",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8222": {
+        "id": "8222",
+        "date": "7月18日",
+        "show_time": "13:30",
+        "title": "7月18日 SNH48星梦剧院 N队 杨宇馨生日公演及作品展演",
+        "link": "https://shop.48.cn/tickets/item/8222",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "8221": {
+        "id": "8221",
+        "date": "7月17日",
+        "show_time": "19:30",
+        "title": "7月17日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8221",
+        "team": "ybs",
+        "fetch_time": "2026-07-31"
+    },
+    "8220": {
+        "id": "8220",
+        "date": "7月16日",
+        "show_time": "19:30",
+        "title": "7月16日 SNH48星梦剧院 TEAM K《我的太阳》",
+        "link": "https://shop.48.cn/tickets/item/8220",
+        "team": "k",
+        "fetch_time": "2026-07-31"
+    },
+    "8219": {
+        "id": "8219",
+        "date": "7月15日",
+        "show_time": "19:30",
+        "title": "7月15日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8219",
+        "team": "ybs",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-25-1330-x": {
+        "id": "api-2026-07-25-1330-x",
+        "date": "7月25日",
+        "show_time": "13:30",
+        "title": "7月25日 SNH48星梦剧院 X队 王睿琦 《渊》TOP16主题生日公演",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "8244": {
+        "id": "8244",
+        "date": "7月24日",
+        "show_time": "19:30",
+        "title": "7月24日 SNH48星梦剧院 N队 作品展演：李继醇",
+        "link": "https://shop.48.cn/tickets/item/8244",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-23-1930-h": {
+        "id": "api-2026-07-23-1930-h",
+        "date": "7月23日",
+        "show_time": "19:30",
+        "title": "7月23日 SNH48星梦剧院 H队 作品展演：温若其、蒋舒婷",
+        "link": "",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "8242": {
+        "id": "8242",
+        "date": "7月22日",
+        "show_time": "19:30",
+        "title": "7月22日 SNH48星梦剧院 YBS 『2026新星闪耀计划』十强专场演出",
+        "link": "https://shop.48.cn/tickets/item/8242",
+        "team": "ybs",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-26-1330-s": {
+        "id": "api-2026-07-26-1330-s",
+        "date": "7月26日",
+        "show_time": "13:30",
+        "title": "7月26日 SNH48星梦剧院 S队 由淼《player 玩家》TOP16主题生日公演",
+        "link": "",
+        "team": "s",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-31-1930-union": {
+        "id": "api-2026-07-31-1930-union",
+        "date": "7月31日",
+        "show_time": "19:30",
+        "title": "7月31日 SNH48星梦剧院 年度青春盛典第二阶段奖励展演",
+        "link": "",
+        "team": "union",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-31-1430-niii": {
+        "id": "api-2026-07-31-1430-niii",
+        "date": "7月31日",
+        "show_time": "14:30",
+        "title": "7月31日 SNH48星梦剧院 TEAM NIII《拾忆：TEAM NIII》",
+        "link": "",
+        "team": "niii",
+        "fetch_time": "2026-07-31"
+    },
+    "8261": {
+        "id": "8261",
+        "date": "7月30日",
+        "show_time": "19:30",
+        "title": "7月30日 SNH48星梦剧院 TEAM G《拾忆：TEAM G》",
+        "link": "https://shop.48.cn/tickets/item/8261",
+        "team": "g",
+        "fetch_time": "2026-07-31"
+    },
+    "8260": {
+        "id": "8260",
+        "date": "7月30日",
+        "show_time": "14:30",
+        "title": "7月30日 SNH48星梦剧院 CKG48 上海巡演《Spicy Fearless》联合公演",
+        "link": "https://shop.48.cn/tickets/item/8260",
+        "team": "union",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-07-29-1930-x": {
+        "id": "api-2026-07-29-1930-x",
+        "date": "7月29日",
+        "show_time": "19:30",
+        "title": "7月29日 SNH48星梦剧院 X队 Team X《Fire X》2.0",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-07-31"
+    },
+    "8258": {
+        "id": "8258",
+        "date": "7月29日",
+        "show_time": "14:30",
+        "title": "7月29日 SNH48星梦剧院 CGT48 上海巡演《破晓》联合公演",
+        "link": "https://shop.48.cn/tickets/item/8258",
+        "team": "union",
+        "fetch_time": "2026-07-31"
+    },
+    "8257": {
+        "id": "8257",
+        "date": "7月28日",
+        "show_time": "19:30",
+        "title": "7月28日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8257",
+        "team": "n",
+        "fetch_time": "2026-07-31"
+    },
+    "8256": {
+        "id": "8256",
+        "date": "7月28日",
+        "show_time": "14:30",
+        "title": "7月28日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8256",
+        "team": "h",
+        "fetch_time": "2026-07-31"
+    },
+    "api-2026-08-01-1830-z": {
+        "id": "api-2026-08-01-1830-z",
+        "date": "8月1日",
+        "show_time": "18:30",
+        "title": "8月1日 SNH48星梦剧院 TEAM Z《Zenith 穹顶之上》",
+        "link": "",
+        "team": "z",
+        "fetch_time": "2026-08-31"
+    },
+    "api-2026-08-01-1330-s": {
+        "id": "api-2026-08-01-1330-s",
+        "date": "8月1日",
+        "show_time": "13:30",
+        "title": "8月1日 SNH48星梦剧院 S队 刘增艳季度MVP公演",
+        "link": "",
+        "team": "s",
+        "fetch_time": "2026-08-31"
+    },
+    "8284": {
+        "id": "8284",
+        "date": "8月16日",
+        "show_time": "18:30",
+        "title": "8月16日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8284",
+        "team": "n",
+        "fetch_time": "2026-08-31"
+    },
+    "8283": {
+        "id": "8283",
+        "date": "8月16日",
+        "show_time": "13:30",
+        "title": "8月16日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8283",
+        "team": "h",
+        "fetch_time": "2026-08-31"
+    },
+    "8282": {
+        "id": "8282",
+        "date": "8月15日",
+        "show_time": "18:30",
+        "title": "8月15日 SNH48星梦剧院 X队 杨冰怡季度MVP",
+        "link": "https://shop.48.cn/tickets/item/8282",
+        "team": "x",
+        "fetch_time": "2026-08-31"
+    },
+    "8280": {
+        "id": "8280",
+        "date": "8月15日",
+        "show_time": "13:30",
+        "title": "8月15日 SNH48星梦剧院 S队 Team S《INTO THE LIGHT》",
+        "link": "https://shop.48.cn/tickets/item/8280",
+        "team": "s",
+        "fetch_time": "2026-08-31"
+    },
+    "8277": {
+        "id": "8277",
+        "date": "8月14日",
+        "show_time": "19:30",
+        "title": "8月14日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8277",
+        "team": "n",
+        "fetch_time": "2026-08-31"
+    },
+    "8276": {
+        "id": "8276",
+        "date": "8月13日",
+        "show_time": "19:30",
+        "title": "8月13日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8276",
+        "team": "ybs",
+        "fetch_time": "2026-08-31"
+    },
+    "api-2026-08-23-1830-x": {
+        "id": "api-2026-08-23-1830-x",
+        "date": "8月23日",
+        "show_time": "18:30",
+        "title": "8月23日 SNH48星梦剧院 X队 Team X《Fire X》2.0",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-08-31"
+    },
+    "8296": {
+        "id": "8296",
+        "date": "8月23日",
+        "show_time": "13:30",
+        "title": "8月23日 SNH48星梦剧院 S队 Team S《INTO THE LIGHT》",
+        "link": "https://shop.48.cn/tickets/item/8296",
+        "team": "s",
+        "fetch_time": "2026-08-31"
+    },
+    "8295": {
+        "id": "8295",
+        "date": "8月22日",
+        "show_time": "18:30",
+        "title": "8月22日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8295",
+        "team": "h",
+        "fetch_time": "2026-08-31"
+    },
+    "8294": {
+        "id": "8294",
+        "date": "8月22日",
+        "show_time": "13:30",
+        "title": "8月22日 SNH48星梦剧院 N队 金莹玥生日公演",
+        "link": "https://shop.48.cn/tickets/item/8294",
+        "team": "n",
+        "fetch_time": "2026-08-31"
+    },
+    "api-2026-08-21-1930-x": {
+        "id": "api-2026-08-21-1930-x",
+        "date": "8月21日",
+        "show_time": "19:30",
+        "title": "8月21日 SNH48星梦剧院 X队 Team X《Fire X》2.0",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-08-31"
+    },
+    "8292": {
+        "id": "8292",
+        "date": "8月20日",
+        "show_time": "19:30",
+        "title": "8月20日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8292",
+        "team": "h",
+        "fetch_time": "2026-08-31"
+    },
+    "8291": {
+        "id": "8291",
+        "date": "8月19日",
+        "show_time": "19:30",
+        "title": "8月19日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8291",
+        "team": "ybs",
+        "fetch_time": "2026-08-31"
+    },
+    "8318": {
+        "id": "8318",
+        "date": "8月30日",
+        "show_time": "18:30",
+        "title": "8月30日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8318",
+        "team": "n",
+        "fetch_time": "2026-08-31"
+    },
+    "8317": {
+        "id": "8317",
+        "date": "8月30日",
+        "show_time": "13:30",
+        "title": "8月30日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8317",
+        "team": "h",
+        "fetch_time": "2026-08-31"
+    },
+    "api-2026-08-29-1830-s": {
+        "id": "api-2026-08-29-1830-s",
+        "date": "8月29日",
+        "show_time": "18:30",
+        "title": "8月29日 SNH48星梦剧院 S队 田姝丽《痴迷（cherry crush）》年度MVP",
+        "link": "",
+        "team": "s",
+        "fetch_time": "2026-08-31"
+    },
+    "api-2026-08-29-1330-x": {
+        "id": "api-2026-08-29-1330-x",
+        "date": "8月29日",
+        "show_time": "13:30",
+        "title": "8月29日 SNH48星梦剧院 X队 杨晔季度MVP",
+        "link": "",
+        "team": "x",
+        "fetch_time": "2026-08-31"
+    },
+    "8314": {
+        "id": "8314",
+        "date": "8月28日",
+        "show_time": "19:30",
+        "title": "8月28日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8314",
+        "team": "h",
+        "fetch_time": "2026-08-31"
+    },
+    "8313": {
+        "id": "8313",
+        "date": "8月27日",
+        "show_time": "19:30",
+        "title": "8月27日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8313",
+        "team": "n",
+        "fetch_time": "2026-08-31"
+    },
+    "8312": {
+        "id": "8312",
+        "date": "8月26日",
+        "show_time": "19:30",
+        "title": "8月26日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8312",
+        "team": "ybs",
+        "fetch_time": "2026-08-31"
+    },
+    "8336": {
+        "id": "8336",
+        "date": "9月6日",
+        "show_time": "18:30",
+        "title": "9月6日 SNH48星梦剧院 YBS 联合生日公演第二场",
+        "link": "https://shop.48.cn/tickets/item/8336",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    },
+    "8335": {
+        "id": "8335",
+        "date": "9月5日",
+        "show_time": "18:30",
+        "title": "9月5日 SNH48星梦剧院 YBS 联合生日公演第一场",
+        "link": "https://shop.48.cn/tickets/item/8335",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    },
+    "8334": {
+        "id": "8334",
+        "date": "9月4日",
+        "show_time": "19:30",
+        "title": "9月4日 SNH48星梦剧院 S队 Team S《INTO THE LIGHT》",
+        "link": "https://shop.48.cn/tickets/item/8334",
+        "team": "s",
+        "fetch_time": "2026-09-12"
+    },
+    "8333": {
+        "id": "8333",
+        "date": "9月3日",
+        "show_time": "19:30",
+        "title": "9月3日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8333",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    },
+    "8354": {
+        "id": "8354",
+        "date": "9月13日",
+        "show_time": "18:30",
+        "title": "9月13日 SNH48星梦剧院 YBS 联合生日公演第三场",
+        "link": "https://shop.48.cn/tickets/item/8354",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    },
+    "8353": {
+        "id": "8353",
+        "date": "9月13日",
+        "show_time": "13:30",
+        "title": "9月13日 SNH48星梦剧院 X队 Team X《Fire X》2.0",
+        "link": "https://shop.48.cn/tickets/item/8353",
+        "team": "x",
+        "fetch_time": "2026-09-12"
+    },
+    "8352": {
+        "id": "8352",
+        "date": "9月12日",
+        "show_time": "18:30",
+        "title": "9月12日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8352",
+        "team": "h",
+        "fetch_time": "2026-09-12"
+    },
+    "api-2026-09-12-1330-n": {
+        "id": "api-2026-09-12-1330-n",
+        "date": "9月12日",
+        "show_time": "13:30",
+        "title": "9月12日 SNH48星梦剧院 N队 青钰雯 《十·一》TOP16主题生日公演",
+        "link": "",
+        "team": "n",
+        "fetch_time": "2026-09-12"
+    },
+    "8350": {
+        "id": "8350",
+        "date": "9月11日",
+        "show_time": "19:30",
+        "title": "9月11日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8350",
+        "team": "h",
+        "fetch_time": "2026-09-12"
+    },
+    "8349": {
+        "id": "8349",
+        "date": "9月10日",
+        "show_time": "19:30",
+        "title": "9月10日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8349",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    },
+    "8364": {
+        "id": "8364",
+        "date": "9月19日",
+        "show_time": "18:30",
+        "title": "9月19日 SNH48星梦剧院 N队 Team NII《肆时墟》",
+        "link": "https://shop.48.cn/tickets/item/8364",
+        "team": "n",
+        "fetch_time": "2026-09-12"
+    },
+    "8363": {
+        "id": "8363",
+        "date": "9月19日",
+        "show_time": "13:30",
+        "title": "9月19日 SNH48星梦剧院 X队 Team X《Fire X》2.0",
+        "link": "https://shop.48.cn/tickets/item/8363",
+        "team": "x",
+        "fetch_time": "2026-09-12"
+    },
+    "8362": {
+        "id": "8362",
+        "date": "9月18日",
+        "show_time": "19:30",
+        "title": "9月18日 SNH48星梦剧院 S队 Team S《INTO THE LIGHT》",
+        "link": "https://shop.48.cn/tickets/item/8362",
+        "team": "s",
+        "fetch_time": "2026-09-12"
+    },
+    "8361": {
+        "id": "8361",
+        "date": "9月17日",
+        "show_time": "19:30",
+        "title": "9月17日 SNH48星梦剧院 H队 Team HII《赫兹共振》2.0",
+        "link": "https://shop.48.cn/tickets/item/8361",
+        "team": "h",
+        "fetch_time": "2026-09-12"
+    },
+    "8360": {
+        "id": "8360",
+        "date": "9月16日",
+        "show_time": "19:30",
+        "title": "9月16日 SNH48星梦剧院 YBS 《心的旅程》",
+        "link": "https://shop.48.cn/tickets/item/8360",
+        "team": "ybs",
+        "fetch_time": "2026-09-12"
+    }
+}

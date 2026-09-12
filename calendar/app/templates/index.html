@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SNH48 公演日历</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        .ticket-card { margin-bottom: 1rem; }
+        .date-badge { font-weight: bold; color: #d81b60; margin-right: 10px; }
+        .status-past { color: #999; font-size: 0.85em; }
+        .status-no-ticket { color: #f0a030; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <main class="container">
+        <hgroup>
+            <h1>SNH48 公演预览</h1>
+            <h2>基于官方票务 API 数据</h2>
+        </hgroup>
+
+        <figure>
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">日期</th>
+                        <th scope="col">公演名称</th>
+                        <th scope="col">购票</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in performances %}
+                    <tr>
+                        <td><span class="date-badge">{{ item.date }} {{ item.show_time }}</span></td>
+                        <td>{{ item.title }}</td>
+                        <td>
+                            {% if item.status == "past" %}
+                            <span class="status-past">已结束</span>
+                            {% elif item.status == "on_sale" %}
+                            <a href="{{ item.link }}" target="_blank">购票</a>
+                            {% else %}
+                            <span class="status-no-ticket">暂未售票</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </figure>
+
+        <footer>
+            <small>最后更新时间: {{ update_time }} | <a href="/api/tickets">API 接口</a> | <a href="/api/calendar.ics">日历订阅</a></small>
+        </footer>
+    </main>
+</body>
+</html>

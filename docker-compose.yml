@@ -27,3 +27,20 @@ services:
       - "8090:80"   # 使用 8090 端口访问网页端面板
     volumes:
       - ./frontend:/usr/share/nginx/html:ro  # 挂载前端代码目录
+
+  # ---------- 公演排期服务(由 snh48-calendar 合并而来) ----------
+  snh48-calendar:
+    build:
+      context: ./calendar
+      dockerfile: Dockerfile
+    container_name: snh48-calendar
+    restart: unless-stopped
+    depends_on:
+      - snh48-backend
+    ports:
+      - "8099:8000"   # 保持原 calendar 项目端口，API 与日历订阅地址不变
+    volumes:
+      - ./config:/config   # 与下载器共用 SQLite，公演排期存 performances 表
+    environment:
+      - TZ=Asia/Shanghai
+      - SCHEDULE_DB=/config/snh48.db
