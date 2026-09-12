@@ -96,8 +96,10 @@ class BiliDownloader:
             'merge_output_format': 'mkv',
             'concurrent_fragment_downloads': 16,
             'socket_timeout': 15,
-            'writesubtitles': True,
-            'subtitleslangs': ['all'],
+            # 只下载视频+音频：关闭字幕/弹幕等额外内容，
+            # 否则每个分P会多下载若干字幕文件，既占带宽也会干扰进度统计
+            'writesubtitles': False,
+            'writeautomaticsub': False,
             'playlist_items': str(p_number),
             'quiet': True,
             'no_warnings': True,

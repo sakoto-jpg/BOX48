@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS downloads (
   title TEXT NOT NULL DEFAULT '',
   codec TEXT,
   path TEXT,
+  scope TEXT,
   status TEXT NOT NULL DEFAULT 'ok',
   path_source TEXT,
   codec_source TEXT,
@@ -87,10 +88,25 @@ class HistoryStore:
             os.makedirs(parent, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            self._migrate(conn)
             conn.execute(
                 "INSERT OR IGNORE INTO schema_meta (key, value) VALUES ('schema_version', '1')"
             )
             conn.commit()
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection):
+        """老库补列：scope（full=整场 / mc=仅MC合集）。"""
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(downloads)")}
+        if "scope" not in columns:
+            conn.execute("ALTER TABLE downloads ADD COLUMN scope TEXT")
+        # 历史记录里标题/路径带「MC合集」的必然是仅MC，其余按整场处理
+        conn.execute(
+            "UPDATE downloads SET scope = CASE "
+            "WHEN path LIKE '%MC合集%' OR title LIKE '%MC合集%' THEN 'mc' "
+            "ELSE 'full' END "
+            "WHERE scope IS NULL OR scope = ''"
+        )
 
     def _warn_legacy_history(self):
         """数据库为空但存在旧 txt 时给出提示，避免静默丢历史。"""
@@ -118,21 +134,23 @@ class HistoryStore:
         return row is not None
 
     def mark_downloaded(self, bvid: str, title: str, codec: str = "",
-                        path: str = "", status: str = "ok"):
+                        path: str = "", status: str = "ok", scope: str = "full"):
         now = datetime.now().isoformat(timespec="seconds")
         file_size = os.path.getsize(path) if path and os.path.exists(path) else None
         codec_source = "probed" if codec else None
+        scope = scope if scope in ("full", "mc") else "full"
         with self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO downloads (
-                  bvid, title, codec, path, status, path_source, codec_source,
+                  bvid, title, codec, path, scope, status, path_source, codec_source,
                   file_size, team, perf_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 'recorded', ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, 'recorded', ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(bvid) DO UPDATE SET
                   title=excluded.title,
                   codec=excluded.codec,
                   path=excluded.path,
+                  scope=excluded.scope,
                   status=excluded.status,
                   path_source=excluded.path_source,
                   codec_source=excluded.codec_source,
@@ -142,11 +160,19 @@ class HistoryStore:
                   updated_at=excluded.updated_at
                 """,
                 (
-                    bvid, title, codec or None, path or None, status, codec_source,
+                    bvid, title, codec or None, path or None, scope, status, codec_source,
                     file_size, _derive_team(path), _derive_date(title, path), now, now,
                 ),
             )
             conn.commit()
+
+    def get(self, bvid: str) -> dict | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT bvid, title, codec, path, scope, status FROM downloads WHERE bvid=?",
+                (bvid,),
+            ).fetchone()
+        return dict(row) if row else None
 
     def recent(self, limit: int = 2) -> List[Tuple[str, str, str, str]]:
         """最近入库的 (bvid, title, codec, path)，供自动洗版使用。
@@ -166,7 +192,7 @@ class HistoryStore:
         """已入库列表（新→旧），供 /api/history 使用。"""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT bvid, title, codec, path, team, perf_date "
+                "SELECT bvid, title, codec, path, scope, team, perf_date "
                 "FROM downloads WHERE status = 'ok' ORDER BY rowid DESC"
             ).fetchall()
         return [dict(row) for row in rows]

@@ -1,5 +1,6 @@
 import os
 import re
+import threading
 import yaml
 import requests
 import datetime
@@ -20,6 +21,10 @@ app.add_middleware(
 )
 
 app.include_router(uploads_router, prefix="/api")
+
+# 下载等待队列（批量下载/洗版排队中，供前端「下载队列」卡片展示）
+download_queue = []
+download_queue_lock = threading.Lock()
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
@@ -295,6 +300,8 @@ def get_history():
         }
         if row.get("codec"):
             entry["codec"] = row["codec"]
+        if row.get("scope"):
+            entry["scope"] = row["scope"]
         completed.append(entry)
     return {
         "completed": completed,
@@ -309,28 +316,66 @@ def download_specific_video(payload: dict, background_tasks: BackgroundTasks):
     background_tasks.add_task(scanner.download_single, url)
     return {"message": "指令已投递，系统正在后台解析下载"}
 
+@app.get("/api/download_queue")
+def get_download_queue():
+    with download_queue_lock:
+        queue = list(download_queue)
+    return {"queue": queue, "active": scanner.active_tasks}
+
+
 @app.post("/api/download_batch")
 def download_batch(payload: dict, background_tasks: BackgroundTasks):
-    """批量下载：按 BV 号依次投递，顺序执行避免并发下载。"""
-    valid = []
+    """批量下载 / 批量洗版：按 BV 号依次投递，顺序执行避免并发下载。
+
+    payload:
+      bvids: ["BV...", ...]
+      scope: 'full' | 'mc'（不传则回退「手动入库」设置）
+      force: true 表示洗版（已入库也重新下载，并清理旧范围版本）
+    """
+    items = []
     seen = set()
-    for bvid in (payload.get("bvids") or []):
-        match = re.match(r"^BV[0-9A-Za-z]{10}$", str(bvid).strip())
+    for item in (payload.get("items") or []):
+        match = re.match(r"^BV[0-9A-Za-z]{10}$", str(item.get("bvid", "")).strip())
         if match and match.group(0) not in seen:
             seen.add(match.group(0))
-            valid.append(match.group(0))
-    if not valid:
+            items.append({"bvid": match.group(0), "title": str(item.get("title") or "")[:200]})
+    if not items:
+        for bvid in (payload.get("bvids") or []):
+            match = re.match(r"^BV[0-9A-Za-z]{10}$", str(bvid).strip())
+            if match and match.group(0) not in seen:
+                seen.add(match.group(0))
+                items.append({"bvid": match.group(0), "title": ""})
+    if not items:
         return {"message": "未提供有效的 BV 号"}
 
+    scope = payload.get("scope")
+    if scope not in ("full", "mc"):
+        scope = None
+    force = bool(payload.get("force"))
+
     def run_batch():
-        for bvid in valid:
-            if scanner._is_downloaded(bvid):
+        for item in items:
+            bvid = item["bvid"]
+            if not force and scanner._is_downloaded(bvid):
                 print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
                 continue
-            scanner.download_single(f"https://www.bilibili.com/video/{bvid}")
+            queue_entry = {
+                "bvid": bvid,
+                "title": item["title"] or bvid,
+                "scope": scope or "auto",
+                "force": force,
+            }
+            with download_queue_lock:
+                download_queue.append(queue_entry)
+            try:
+                scanner.download_single(f"https://www.bilibili.com/video/{bvid}", scope=scope)
+            finally:
+                with download_queue_lock:
+                    download_queue[:] = [q for q in download_queue if q is not queue_entry]
 
     background_tasks.add_task(run_batch)
-    return {"message": f"已投递 {len(valid)} 个下载任务，将按顺序处理"}
+    label = "洗版" if force else "下载"
+    return {"message": f"已投递 {len(items)} 个{label}任务，将按顺序处理"}
 
 @app.get("/api/emby_status")
 def get_emby_status():

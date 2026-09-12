@@ -225,7 +225,7 @@
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[500px]">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">入库监控中心</h2>
+                        <h2 class="text-lg font-bold text-slate-800">下载队列</h2>
                     </div>
                     
                     <div class="overflow-y-auto no-scrollbar flex-1 bg-slate-50 rounded-xl p-3 border border-slate-100">
@@ -255,23 +255,23 @@
                             </div>
                         </div>
 
-                        <h4 v-if="history.length > 0" class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">已入库</h4>
-                        <div v-if="history.length === 0 && Object.keys(activeTasks).length === 0" class="h-full flex items-center justify-center text-slate-400 text-sm">暂无记录</div>
-                        
-                        <TransitionGroup name="list" tag="ul" class="space-y-2">
-                            <li v-for="item in history" :key="item.id" class="bg-white border border-slate-100 p-3 rounded-lg flex flex-col hover:shadow-md transition-shadow group">
-                                <div class="flex justify-between items-start">
-                                    <span class="text-sm font-bold text-slate-700 line-clamp-2 flex-1 pr-2" :title="item.title">{{ item.title }}</span>
-                                    <span v-if="item.codec"
-                                        :class="item.codec === 'av1' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200'"
-                                        class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 mt-0.5 mr-2">
-                                        {{ item.codec === 'av1' ? 'AV1' : (item.codec === 'h264' ? 'H.264' : item.codec.toUpperCase()) }}
-                                    </span>
-                                    <a :href="'https://www.bilibili.com/video/' + item.id" target="_blank" class="text-xs text-blue-500 hover:underline shrink-0">源链接</a>
+                        <div v-if="downloadQueue.length > 0" class="space-y-2">
+                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">排队中 ({{ downloadQueue.length }})</h4>
+                            <div v-for="(item, idx) in downloadQueue" :key="'q'+item.bvid+idx"
+                                 class="bg-white border border-slate-100 p-3 rounded-lg flex items-center justify-between">
+                                <div class="min-w-0 pr-2">
+                                    <p class="text-sm font-bold text-slate-700 line-clamp-1" :title="item.title">{{ item.title }}</p>
+                                    <span class="text-[10px] font-mono text-slate-400">{{ item.bvid }}</span>
                                 </div>
-                                <span class="text-[10px] font-mono text-slate-400 mt-1 uppercase">{{ item.id }}</span>
-                            </li>
-                        </TransitionGroup>
+                                <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                                      :class="item.force ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'">
+                                    {{ item.force ? '洗版为' + (item.scope === 'mc' ? '仅MC' : '全场') : '等待下载' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-if="Object.keys(activeTasks).length === 0 && downloadQueue.length === 0"
+                             class="h-full flex items-center justify-center text-slate-400 text-sm">当前没有下载任务</div>
                     </div>
                 </div>
             </div>
@@ -303,9 +303,33 @@
                         <input v-model="uploadKeyword" @keydown.enter="searchUploads" placeholder="按关键词或 BV 号筛选，如：生日公演 / BV1SebL6KECq"
                                class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-400 outline-none">
                         <label class="flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer">
-                            <input type="checkbox" v-model="uploadOnlyMissing" class="rounded"> 只看未入库
+                            <input type="checkbox" v-model="uploadOnlyMissing" @change="uploadOnlyDownloaded = false; searchUploads()" class="rounded"> 只看未入库
+                        </label>
+                        <label class="flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer">
+                            <input type="checkbox" v-model="uploadOnlyDownloaded" @change="uploadOnlyMissing = false; if (!uploadOnlyDownloaded) { uploadDownloadedScope = ''; uploadDownloadedCodec = ''; } searchUploads()" class="rounded"> 只看已入库
                         </label>
                         <button @click="searchUploads" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 rounded-lg text-sm transition">搜索</button>
+                    </div>
+
+                    <div class="flex flex-wrap gap-1.5 mb-3">
+                        <button v-for="opt in uploadCategoryOptions" :key="opt.key"
+                                @click="setUploadCategory(opt.key)"
+                                :class="uploadCategory === opt.key ? 'bg-violet-600 text-white border-violet-600' : 'bg-white text-slate-600 border-slate-200 hover:border-violet-300 hover:text-violet-600'"
+                                class="px-2.5 py-1.5 rounded-lg border text-xs font-medium transition">
+                            {{ opt.label }}<span v-if="uploadCategoryCount(opt.key)" class="ml-1 opacity-70">{{ uploadCategoryCount(opt.key) }}</span>
+                        </button>
+                    </div>
+
+                    <div v-if="uploadOnlyDownloaded" class="flex flex-wrap items-center gap-1.5 mb-3">
+                        <button v-for="opt in uploadScopeOptions" :key="'s'+opt.key"
+                                @click="setUploadDownloadedScope(opt.key)"
+                                :class="uploadDownloadedScope === opt.key ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:border-emerald-300 hover:text-emerald-600'"
+                                class="px-2.5 py-1.5 rounded-lg border text-xs font-medium transition">{{ opt.label }}</button>
+                        <span class="w-px h-4 bg-slate-200 mx-1"></span>
+                        <button v-for="opt in uploadCodecOptions" :key="'c'+opt.key"
+                                @click="setUploadDownloadedCodec(opt.key)"
+                                :class="uploadDownloadedCodec === opt.key ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:text-purple-600'"
+                                class="px-2.5 py-1.5 rounded-lg border text-xs font-medium transition">{{ opt.label }}</button>
                     </div>
 
                     <div class="overflow-y-auto no-scrollbar max-h-80 bg-slate-50 rounded-xl border border-slate-100 p-2 space-y-2">
@@ -324,7 +348,12 @@
                                     <span v-if="item.duration">{{ formatDuration(item.duration) }}</span>
                                     <span>{{ item.parts }}P</span>
                                     <span>{{ item.bvid }}</span>
-                                    <span v-if="item.downloaded" class="text-green-600 font-semibold">✓ 已入库</span>
+                                    <span v-if="item.downloaded" class="text-green-600 font-semibold">✓ 已入库{{ uploadScopeLabel(item.downloaded_scope) }}</span>
+                                    <span v-if="item.downloaded_codec"
+                                        :class="item.downloaded_codec === 'av1' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-100 text-slate-600 border-slate-200'"
+                                        class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border">
+                                        {{ item.downloaded_codec === 'av1' ? 'AV1' : (item.downloaded_codec === 'h264' ? 'H.264' : item.downloaded_codec.toUpperCase()) }}
+                                    </span>
                                 </div>
                             </div>
                         </label>
@@ -350,14 +379,19 @@
                     <div class="flex items-center justify-between mt-3">
                         <span class="text-xs text-slate-500">已选 {{ uploadSelected.length }} 条 / 匹配 {{ uploadTotal }} 条</span>
                         <div class="flex gap-2">
+                            <button v-if="uploadRepair.show" @click="runRepairAction" :disabled="uploadSubmitting"
+                                    class="bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-semibold px-3 py-2 rounded-lg text-sm transition">
+                                {{ uploadRepair.label }}
+                            </button>
                             <button v-if="uploadBvCandidate" @click="downloadSingleBv"
                                     :disabled="uploadSubmitting"
                                     class="bg-white border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:bg-slate-100 disabled:text-slate-400 font-semibold px-3 py-2 rounded-lg text-sm transition">
                                 下载此 BV
                             </button>
-                            <button @click="downloadSelected" :disabled="uploadSelected.length === 0 || uploadSubmitting"
-                                    class="bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
-                                {{ uploadSubmitting ? '投递中...' : `批量下载所选（${uploadSelected.length}）` }}
+                            <button @click="runUploadAction" :disabled="uploadSelected.length === 0 || uploadSubmitting || uploadAction.disabled"
+                                    :class="uploadAction.force ? 'bg-amber-600 hover:bg-amber-700' : 'bg-violet-600 hover:bg-violet-700'"
+                                    class="disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                                {{ uploadSubmitting ? '投递中...' : uploadAction.label }}
                             </button>
                         </div>
                     </div>
@@ -460,8 +494,8 @@
                 const API_BASE = "http://192.168.1.12:8095/api";
                 const TICKET_API = "http://192.168.1.12:8099/api/tickets";
                 
-                const history = ref([]);
                 const activeTasks = ref({});
+                const downloadQueue = ref([]);
                 const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, preferred_codec: "av1", auto_download_scope: "full", manual_download_scope: "full" });
                 const scanMessage = ref("");
                 const isScanning = ref(false);
@@ -474,6 +508,30 @@
                 const uploadLoading = ref(false);
                 const uploadKeyword = ref("");
                 const uploadOnlyMissing = ref(false);
+                const uploadOnlyDownloaded = ref(false);
+                const uploadCategory = ref("");
+                const uploadCategories = ref({});
+                const uploadCategoryOptions = [
+                    { key: "", label: "全部" },
+                    { key: "nii", label: "TEAM NII" },
+                    { key: "x", label: "TEAM X" },
+                    { key: "hii", label: "TEAM HII" },
+                    { key: "sii", label: "TEAM SII" },
+                    { key: "trainee", label: "预备生/新生" },
+                    { key: "special", label: "特殊公演" },
+                ];
+                const uploadScopeOptions = [
+                    { key: "", label: "全部范围" },
+                    { key: "full", label: "全场" },
+                    { key: "mc", label: "仅MC" },
+                ];
+                const uploadDownloadedScope = ref("");
+                const uploadCodecOptions = [
+                    { key: "", label: "全部编码" },
+                    { key: "av1", label: "AV1" },
+                    { key: "h264", label: "H.264" },
+                ];
+                const uploadDownloadedCodec = ref("");
                 const uploadSelected = ref([]);
                 const uploadStats = ref({});
                 const uploadSubmitting = ref(false);
@@ -509,6 +567,56 @@
 
                 const uploadBvCandidate = computed(() => extractBv(uploadKeyword.value));
 
+                const uploadScopeLabel = (scope) => {
+                    if (scope === 'mc') return '·仅MC';
+                    if (scope === 'full') return '·全场';
+                    return '';
+                };
+
+                const uploadAction = computed(() => {
+                    const selected = uploads.value.filter(item => uploadSelected.value.includes(item.bvid));
+                    if (selected.length === 0) {
+                        return { label: '批量下载所选（0）', scope: null, force: false, disabled: true };
+                    }
+                    const allDownloaded = selected.every(item => item.downloaded);
+                    const scopes = new Set(selected.map(item => item.downloaded_scope || 'full'));
+                    if (allDownloaded && scopes.size > 1) {
+                        return { label: '范围不一致，无法批量洗版', scope: null, force: false, disabled: true };
+                    }
+                    if (allDownloaded && scopes.size === 1) {
+                        const target = selected[0].downloaded_scope === 'mc' ? 'full' : 'mc';
+                        return {
+                            label: `批量洗版为${target === 'mc' ? '仅MC' : '全场'}（${selected.length}）`,
+                            scope: target,
+                            force: true,
+                            disabled: false
+                        };
+                    }
+                    return { label: `批量下载所选（${selected.length}）`, scope: null, force: false, disabled: false };
+                });
+
+                const uploadTargetCodec = computed(() => config.value.preferred_codec === 'avc' ? 'h264' : 'av1');
+
+                const uploadRepair = computed(() => {
+                    const selected = uploads.value.filter(item => uploadSelected.value.includes(item.bvid));
+                    const allDownloaded = selected.length > 0 && selected.every(item => item.downloaded);
+                    const scopes = new Set(selected.map(item => item.downloaded_scope || 'full'));
+                    if (!allDownloaded || scopes.size !== 1) return { show: false };
+                    const target = uploadTargetCodec.value;
+                    const needs = selected.some(item => (item.downloaded_codec || '') !== target);
+                    if (!needs) return { show: false };
+                    return {
+                        show: true,
+                        scope: selected[0].downloaded_scope || 'full',
+                        label: `重下·修复编码为${target === 'av1' ? 'AV1' : 'H.264'}（${selected.length}）`
+                    };
+                });
+
+                const runRepairAction = () => {
+                    if (!uploadRepair.value.show) return;
+                    submitDownloads(uploadSelected.value, uploadRepair.value.scope, true);
+                };
+
                 const scheduleMap = ref({});
                 const currentDate = new Date();
                 const currentYear = ref(currentDate.getFullYear());
@@ -542,12 +650,12 @@
                     return Array.from({ length: 24 }, (_, i) => i).filter(h => !selected.includes(h));
                 });
 
-                const fetchHistory = async () => {
+                const fetchDownloadQueue = async () => {
                     try {
-                        const res = await fetch(`${API_BASE}/history`);
+                        const res = await fetch(`${API_BASE}/download_queue`);
                         const data = await res.json();
-                        history.value = data.completed || [];
                         activeTasks.value = data.active || {};
+                        downloadQueue.value = data.queue || [];
                     } catch (e) { }
                 };
 
@@ -564,6 +672,7 @@
                         const res = await fetch(`${API_BASE}/uploads/stats`);
                         uploadStats.value = await res.json();
                     } catch (e) {}
+                    fetchUploadCategories();
                 };
 
                 const fetchUploads = async (append = false) => {
@@ -573,7 +682,11 @@
                             keyword: uploadKeyword.value || "",
                             limit: 50,
                             offset: append ? uploads.value.length : 0,
-                            only_missing: uploadOnlyMissing.value
+                            only_missing: uploadOnlyMissing.value,
+                            only_downloaded: uploadOnlyDownloaded.value,
+                            category: uploadCategory.value || "",
+                            downloaded_scope: uploadDownloadedScope.value || "",
+                            downloaded_codec: uploadDownloadedCodec.value || ""
                         });
                         const res = await fetch(`${API_BASE}/uploads?${params.toString()}`);
                         const data = await res.json();
@@ -593,6 +706,33 @@
                 };
 
                 const loadMoreUploads = () => fetchUploads(true);
+
+                const setUploadCategory = (key) => {
+                    uploadCategory.value = key;
+                    searchUploads();
+                };
+
+                const setUploadDownloadedScope = (key) => {
+                    uploadDownloadedScope.value = key;
+                    searchUploads();
+                };
+
+                const setUploadDownloadedCodec = (key) => {
+                    uploadDownloadedCodec.value = key;
+                    searchUploads();
+                };
+
+                const uploadCategoryCount = (key) => {
+                    if (!key) return uploadCategories.value.total || 0;
+                    return (uploadCategories.value.categories || {})[key] || 0;
+                };
+
+                const fetchUploadCategories = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/uploads/categories`);
+                        uploadCategories.value = await res.json();
+                    } catch (e) {}
+                };
 
                 const formatDuration = (seconds) => {
                     if (!seconds && seconds !== 0) return "";
@@ -669,19 +809,28 @@
                     }
                 };
 
-                const submitDownloads = async (bvids) => {
+                const submitDownloads = async (bvids, scope, force = false) => {
                     const unique = [...new Set(bvids)].filter(Boolean);
                     if (unique.length === 0) return;
+                    const items = unique.map(bvid => {
+                        const found = uploads.value.find(u => u.bvid === bvid);
+                        return { bvid, title: found ? found.title : "" };
+                    });
                     uploadSubmitting.value = true;
                     try {
                         const res = await fetch(`${API_BASE}/download_batch`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ bvids: unique })
+                            body: JSON.stringify({
+                                items,
+                                scope: scope || config.value.manual_download_scope || 'full',
+                                force: !!force
+                            })
                         });
                         const data = await res.json();
                         alert('✅ ' + (data.message || '已投递'));
                         uploadSelected.value = [];
+                        fetchDownloadQueue();
                     } catch (e) {
                         alert('❌ 请求失败');
                     } finally {
@@ -689,10 +838,18 @@
                     }
                 };
 
-                const downloadSelected = () => submitDownloads(uploadSelected.value);
+                const runUploadAction = () => {
+                    const action = uploadAction.value;
+                    submitDownloads(
+                        uploadSelected.value,
+                        action.scope || config.value.manual_download_scope || 'full',
+                        action.force
+                    );
+                };
+
                 const downloadSingleBv = () => {
                     const bvid = uploadBvCandidate.value;
-                    if (bvid) submitDownloads([bvid]);
+                    if (bvid) submitDownloads([bvid], config.value.manual_download_scope || 'full', false);
                 };
 
                 const saveConfig = async () => {
@@ -767,10 +924,10 @@
                 };
 
                 onMounted(() => {
-                    fetchHistory();
+                    fetchDownloadQueue();
                     fetchConfig();
                     fetchSchedules();
-                    pollInterval = setInterval(fetchHistory, 1500);
+                    pollInterval = setInterval(fetchDownloadQueue, 1500);
                     fetchEmbyStatus();
                     embyPoll = setInterval(fetchEmbyStatus, 30000);
                     fetchUploads();
@@ -785,15 +942,20 @@
                 });
 
                 return {
-                    history, activeTasks, config, scanMessage, isScanning,
+                    activeTasks, downloadQueue, config, scanMessage, isScanning,
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
-                    changeMonth, fetchHistory, triggerScan, saveConfig, toggleManualSub,
+                    changeMonth, fetchDownloadQueue, triggerScan, saveConfig, toggleManualSub,
                     addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
                     schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour,
                     embyStatus, embyStatusLabel,
-                    uploads, uploadTotal, uploadLoading, uploadKeyword, uploadOnlyMissing,
+                    uploads, uploadTotal, uploadLoading, uploadKeyword, uploadOnlyMissing, uploadOnlyDownloaded,
+                    uploadCategory, uploadCategories, uploadCategoryOptions, setUploadCategory, uploadCategoryCount,
+                    uploadScopeOptions, uploadDownloadedScope, setUploadDownloadedScope,
+                    uploadCodecOptions, uploadDownloadedCodec, setUploadDownloadedCodec,
                     uploadSelected, uploadStats, uploadStatsText, uploadSubmitting, uploadBvCandidate,
-                    searchUploads, loadMoreUploads, formatDuration, downloadSelected, downloadSingleBv
+                    uploadAction, uploadScopeLabel,
+                    uploadRepair, runRepairAction,
+                    searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv
                 };
             }
         }).mount('#app')

@@ -31,6 +31,7 @@ class Snh48Scanner:
     def __init__(self, config_path: str, cookie_path: str, base_download_path: str):
         self.config_path = config_path
         self.cookie_path = cookie_path
+        self.base_download_path = base_download_path
         self.nfo_builder = NfoBuilder(config_path, base_download_path)
         self.downloader = BiliDownloader(cookie_path)
         # 旧 download_history.txt 仅作只读备份；读写全部走 SQLite
@@ -68,8 +69,10 @@ class Snh48Scanner:
         return self.history_store.is_downloaded(bvid)
 
     def _mark_downloaded(self, bvid: str, title: str, codec: str = '',
-                         path: str = '', status: str = 'ok'):
-        self.history_store.mark_downloaded(bvid, title, codec=codec, path=path, status=status)
+                         path: str = '', status: str = 'ok', scope: str = 'full'):
+        self.history_store.mark_downloaded(
+            bvid, title, codec=codec, path=path, status=status, scope=scope
+        )
 
     def _match_team(self, title: str, include_disabled: bool = False) -> str:
         """匹配标题所属队伍。
@@ -124,11 +127,14 @@ class Snh48Scanner:
         }
 
     def _probe_av1_availability(self, bvid: str, p_numbers: List[int] = None) -> bool:
-        """探测指定分P是否均提供 AV1 源，全部提供才返回 True，否则(含探测失败)返回 False。
+        """探测指定分P是否均提供 AV1 源。
 
         p_numbers: 1-based 分P号列表，None 表示探测全部。MC 模式只合并选中的
         分P，编码一致性只要求在选中集合内，故仅探测选中分P。
         分P合并要求编码一致，混编会导致合并失败。
+
+        返回 True 表示全部有 AV1；返回 False 表示确认缺源，或连续多次探测异常。
+        探测异常会重试，避免把 B 站偶发抓取失败误判成“没有 AV1 源”。
         """
         if p_numbers is not None and not p_numbers:
             return False
@@ -142,26 +148,39 @@ class Snh48Scanner:
                 'Referer': 'https://www.bilibili.com/'
             }
         }
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
-            entries = info.get('entries') if info else None
-            if not entries:
-                return False
-            missing_parts = []
-            for i, entry in enumerate(entries):
-                if p_numbers is not None and (i + 1) not in p_numbers:
+        max_attempts = 3
+        for attempt in range(1, max_attempts + 1):
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
+                entries = info.get('entries') if info else None
+                if not entries:
+                    raise RuntimeError("未获取到分P信息")
+
+                missing_parts = []
+                for i, entry in enumerate(entries):
+                    if p_numbers is not None and (i + 1) not in p_numbers:
+                        continue
+                    if not entry or not any((f.get('vcodec') or '').startswith('av01')
+                                            for f in entry.get('formats') or []):
+                        missing_parts.append(i + 1)
+                if missing_parts:
+                    # 已确认缺源，重试也不会出现，直接整场回退 H264
+                    print(f"⚠️ 整场 AV1 探测：分P {', '.join(map(str, missing_parts))} "
+                          f"无 AV1 源，整场回退 H264", flush=True)
+                    return False
+                return True
+            except Exception as e:
+                if attempt < max_attempts:
+                    wait = attempt * 15
+                    print(f"⚠️ AV1 探测异常（第 {attempt}/{max_attempts} 次）: {e}；"
+                          f"{wait}s 后重试", flush=True)
+                    time.sleep(wait)
                     continue
-                if not entry or not any((f.get('vcodec') or '').startswith('av01')
-                                        for f in entry.get('formats') or []):
-                    missing_parts.append(i + 1)
-            if missing_parts:
-                print(f"⚠️ 整场 AV1 探测：分P {', '.join(map(str, missing_parts))} 无 AV1 源", flush=True)
+                print(f"⚠️ AV1 探测连续 {max_attempts} 次异常，本次回退 H264"
+                      f"（后续自动洗版会再尝试）: {e}", flush=True)
                 return False
-            return True
-        except Exception as e:
-            print(f"⚠️ AV1 整场探测失败，本场回退 AVC: {e}", flush=True)
-            return False
+        return False
 
     def _create_hook(self, bvid, p_number=None):
         lock = self._progress_lock
@@ -182,8 +201,13 @@ class Snh48Scanner:
                         task['progress'] = clean_percent
                 elif d['status'] == 'finished':
                     if p_number is not None:
-                        task['part_progress'][p_number] = '100%'
-                        task['p_done'] = task.get('p_done', 0) + 1
+                        # 只统计视频流完成，音频/字幕等附加下载不计入分P进度，
+                        # 避免出现 p_done 超过 p_total（例如 34/12）的情况
+                        info = d.get('info_dict') or {}
+                        vcodec = str(info.get('vcodec') or '').lower()
+                        if vcodec and vcodec != 'none':
+                            task['part_progress'][p_number] = '100%'
+                            task['p_done'] = task.get('p_done', 0) + 1
 
                 if task.get('part_progress'):
                     parts = task['part_progress']
@@ -223,7 +247,7 @@ class Snh48Scanner:
         # 编码偏好：AV1 优先时先探测(MC 模式仅探测选中分P)，确保参与合并的分P编码一致
         prefer_codec = self._get_preferred_codec()
         if prefer_codec == 'av01' and not self._probe_av1_availability(bvid, [i + 1 for i, _ in selected]):
-            print(f"⚠️ {bvid} 部分分P无 AV1 源，本场回退 H.264(AVC) 编码下载", flush=True)
+            print(f"⚠️ {bvid} AV1 不可用（缺源或探测失败），本场回退 H.264(AVC) 编码下载", flush=True)
             prefer_codec = 'avc'
 
         overall_plot = video_info.get('description') or ''
@@ -335,7 +359,9 @@ class Snh48Scanner:
                     self.active_tasks[bvid]['status'] = "洗版失败，保留原文件" if keep_existing else "合并失败，未入库"
                 return
             codec = get_video_codec(final_path)
-            self._mark_downloaded(bvid, perf_title, codec, final_path)
+            self._mark_downloaded(
+                bvid, perf_title, codec, final_path, scope=('mc' if is_mc else 'full')
+            )
             try:
                 import requests as req_lib
                 with open(self.config_path, 'r', encoding='utf-8') as f:
@@ -521,15 +547,49 @@ class Snh48Scanner:
                     self.active_tasks[bvid]['status'] = "解析彻底失败"
         return False
 
-    def download_single(self, video_url: str):
+    def download_single(self, video_url: str, scope: str = None):
+        """手动下载单个 BV。
+
+        scope: 'full' 整场 / 'mc' 仅MC；显式传入优先，未传则回退「手动入库」设置。
+        范围发生变化时（洗版换范围）在新文件成功落盘后清理旧版本目录。
+        """
         bvid_match = re.search(r'(BV\w+)', video_url)
         if not bvid_match: return
         bvid = bvid_match.group(1)
+        if scope not in ('full', 'mc'):
+            scope = self._get_download_scope('manual')
 
+        old = self.history_store.get(bvid)
+        old_path = old.get('path') if old else None
+        old_scope = old.get('scope') if old else None
         self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
-        scope = self._get_download_scope('manual')   # 手动补档跟随「手动入库」下载范围设置
-        # 精准补档属于手动入库：允许匹配未开启自动入库的队伍
+        # 手动下载允许匹配未开启自动入库的队伍
         self._process_bvid(bvid, scope=scope, include_disabled=True)
+
+        new = self.history_store.get(bvid)
+        if (old_path and old_scope and old_scope != scope and new
+                and new.get('status') == 'ok' and new.get('path')
+                and new['path'] != old_path):
+            self._remove_old_version(old_path, new['path'])
+
+    def _remove_old_version(self, old_path: str, new_path: str):
+        """洗版换范围成功后清理旧版本目录（仅限下载根目录内，且新文件已存在）。"""
+        try:
+            if not new_path or not os.path.exists(new_path):
+                return
+            old_dir = os.path.dirname(old_path)
+            new_dir = os.path.dirname(new_path)
+            if not old_dir or old_dir == new_dir or not os.path.isdir(old_dir):
+                return
+            base = os.path.realpath(self.base_download_path)
+            real_old = os.path.realpath(old_dir)
+            if not real_old.startswith(base + os.sep):
+                print(f"⚠️ 洗版清理跳过(路径越界): {old_dir}", flush=True)
+                return
+            shutil.rmtree(real_old)
+            print(f"🧹 洗版换范围完成，已清理旧版本: {old_dir}", flush=True)
+        except Exception as e:
+            print(f"⚠️ 洗版清理旧版本失败: {e}", flush=True)
 
     def _auto_rewash(self):
         """自动洗版：检查最近入库的 2 场公演(按 bvid 去重)，
