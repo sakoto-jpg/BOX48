@@ -13,8 +13,19 @@ import sqlite3
 from datetime import datetime
 from typing import List, Optional, Tuple
 
+from team_utils import (
+    CANON_GROUP,
+    CANON_HII,
+    CANON_NII,
+    CANON_SII,
+    CANON_TRAINEE,
+    CANON_X,
+    normalize_team,
+)
+
 DATE8_RE = re.compile(r"20\d{6}")
 DATE_DASH_RE = re.compile(r"(20\d{2})-(\d{2})-(\d{2})")
+CANONICAL_TEAMS = {CANON_NII, CANON_HII, CANON_SII, CANON_X, CANON_TRAINEE, CANON_GROUP}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (
@@ -107,6 +118,14 @@ class HistoryStore:
             "ELSE 'full' END "
             "WHERE scope IS NULL OR scope = ''"
         )
+        # 对齐队伍字段：旧库里是目录名(YBS、特殊公演等)，统一转成规范名称
+        updates = []
+        for row in conn.execute("SELECT bvid, title, path, team FROM downloads").fetchall():
+            if row[3] in CANONICAL_TEAMS:
+                continue
+            updates.append((normalize_team(row[1], _derive_team(row[2])), row[0]))
+        if updates:
+            conn.executemany("UPDATE downloads SET team = ? WHERE bvid = ?", updates)
 
     def _warn_legacy_history(self):
         """数据库为空但存在旧 txt 时给出提示，避免静默丢历史。"""
@@ -161,7 +180,8 @@ class HistoryStore:
                 """,
                 (
                     bvid, title, codec or None, path or None, scope, status, codec_source,
-                    file_size, _derive_team(path), _derive_date(title, path), now, now,
+                    file_size, normalize_team(title, _derive_team(path)),
+                    _derive_date(title, path), now, now,
                 ),
             )
             conn.commit()

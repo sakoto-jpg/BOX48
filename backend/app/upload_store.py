@@ -11,11 +11,14 @@ import os
 import sqlite3
 from datetime import datetime
 
+from team_utils import clean_team_from_title
+
 UPLOAD_SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
   bvid TEXT PRIMARY KEY,
   aid INTEGER,
   title TEXT NOT NULL DEFAULT '',
+  team TEXT,
   pubdate INTEGER,
   pub_date TEXT,
   duration INTEGER,
@@ -63,7 +66,23 @@ class UploadStore:
             os.makedirs(parent, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(UPLOAD_SCHEMA)
+            self._migrate(conn)
             conn.commit()
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection):
+        """老库补列：uploads.team（按标题清洗队伍），并回填历史数据。"""
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(uploads)")}
+        if "team" not in columns:
+            conn.execute("ALTER TABLE uploads ADD COLUMN team TEXT")
+        rows = conn.execute(
+            "SELECT bvid, title FROM uploads WHERE team IS NULL OR team = ''"
+        ).fetchall()
+        if rows:
+            conn.executemany(
+                "UPDATE uploads SET team = ? WHERE bvid = ?",
+                [(clean_team_from_title(row[1]), row[0]) for row in rows],
+            )
 
     @staticmethod
     def _now() -> str:
@@ -130,12 +149,13 @@ class UploadStore:
             conn.execute(
                 """
                 INSERT INTO uploads (
-                  bvid, aid, title, pubdate, pub_date, duration, parts,
+                  bvid, aid, title, team, pubdate, pub_date, duration, parts,
                   owner_mid, owner_name, cover, pages_json, first_seen, last_seen
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(bvid) DO UPDATE SET
                   aid=excluded.aid,
                   title=excluded.title,
+                  team=excluded.team,
                   pubdate=excluded.pubdate,
                   pub_date=excluded.pub_date,
                   duration=excluded.duration,
@@ -150,6 +170,7 @@ class UploadStore:
                     detail.get("bvid"),
                     detail.get("aid"),
                     detail.get("title") or "",
+                    clean_team_from_title(detail.get("title")),
                     detail.get("pubdate"),
                     detail.get("pub_date"),
                     detail.get("duration"),

@@ -7,8 +7,12 @@
 import os
 import re
 import sqlite3
+from datetime import datetime
 
 from fastapi import APIRouter, Query
+
+from team_utils import CANON_GROUP, CODE_TO_CANON, clean_team_from_title
+from upload_store import UploadStore
 
 router = APIRouter()
 
@@ -25,10 +29,65 @@ CATEGORY_CONDITIONS = {
     "trainee": "(u.title LIKE '%预备生%' OR u.title LIKE '%新生%')",
 }
 
+def _upload_year_month_day(title: str, pub_date: str):
+    """从投稿标题/发布日期解析 (年, 月, 日)。"""
+    match = re.search(r"(20\d{2})(\d{2})(\d{2})", title or "")
+    if match:
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+    match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", pub_date or "")
+    if match:
+        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+    return None
+
+
+def _performance_year(fetch_time: str, month: int) -> int:
+    """排期年份：优先用抓取时间所在年份，兜底沿用日历的跨年推断。"""
+    match = re.search(r"(20\d{2})", fetch_time or "")
+    if match:
+        return int(match.group(1))
+    now = datetime.now()
+    year = now.year
+    if month < now.month - 2:
+        year += 1
+    return year
+
+
+def _pick_schedule_upload(perf, candidates, year):
+    """在同年投稿里为一场排期挑选录播。
+
+    先按规范队伍匹配，再用剧目名《》收敛；若队伍判定不一致（例如排期标题
+    写 YBS《心的旅程》、投稿标题写“新生公演”），则放宽为同日期按剧目名匹配。
+    """
+    same_day = [u for u in candidates if u["year"] == year]
+    if not same_day:
+        return None
+
+    team = clean_team_from_title(perf["title"])
+    code = (perf["team"] or "").lower()
+    if team == CANON_GROUP and code in ("n", "h", "s", "x"):
+        team = CODE_TO_CANON[code]
+
+    pool = [u for u in same_day if u["team"] == team]
+    plays = re.findall(r"《([^》]+)》", perf["title"] or "")
+    if plays:
+        named = [u for u in pool if any(p in (u["title"] or "") for p in plays)]
+        if named:
+            pool = named
+        else:
+            named_any_team = [u for u in same_day if any(p in (u["title"] or "") for p in plays)]
+            if named_any_team:
+                pool = named_any_team
+    if len(pool) > 1:
+        pool = sorted(pool, key=lambda u: (u["parts"], u["pubdate"]), reverse=True)[:1]
+    return pool[0] if pool else None
+
 DB_PATH = os.path.join(
     os.path.dirname(os.environ.get("CONFIG_PATH", "/config/roster.yaml")),
     "snh48.db",
 )
+
+# 启动时确保 uploads.team 列存在并按标题回填（历史数据一次性清洗）
+_upload_store = UploadStore(DB_PATH)
 
 
 def _connect() -> sqlite3.Connection:
@@ -185,3 +244,79 @@ def upload_stats():
         "full_sync_completed": state.get("full_sync_completed"),
         "last_incremental_at": state.get("last_incremental_at"),
     }
+
+
+@router.get("/schedule_status")
+def schedule_status(date: str = ""):
+    """某天排期列表的录播/入库状态（供前端日历卡片查缺补漏）。
+
+    匹配键：年 + 月 + 日 + 规范队伍名（uploads.team / performances 标题清洗），
+    再按剧目名《》收敛；年份取自排期的 fetch_time，避免把往年同日投稿错配进来。
+    """
+    match = re.search(r"(\d+)月(\d+)日", date or "")
+    if not match:
+        return {"date": date, "items": []}
+    month, day = int(match.group(1)), int(match.group(2))
+
+    conn = _connect()
+    try:
+        if not _has_table(conn, "performances"):
+            return {"date": date, "items": []}
+        performances = conn.execute(
+            "SELECT id, date, show_time, title, team, link, fetch_time "
+            "FROM performances WHERE date=?",
+            (date,),
+        ).fetchall()
+        upload_rows = conn.execute(
+            "SELECT bvid, title, team, pub_date, pubdate, parts FROM uploads"
+        ).fetchall()
+        downloads = {}
+        if _has_table(conn, "downloads"):
+            downloads = {
+                row[0]: {"scope": row[1], "codec": row[2]}
+                for row in conn.execute(
+                    "SELECT bvid, scope, codec FROM downloads WHERE status='ok'"
+                )
+            }
+    finally:
+        conn.close()
+
+    candidates = []
+    for row in upload_rows:
+        parsed = _upload_year_month_day(row["title"], row["pub_date"])
+        if not parsed or parsed[1] != month or parsed[2] != day:
+            continue
+        candidates.append({
+            "bvid": row["bvid"],
+            "title": row["title"],
+            "year": parsed[0],
+            "team": row["team"] or clean_team_from_title(row["title"]),
+            "pubdate": row["pubdate"] or 0,
+            "parts": row["parts"] or 0,
+        })
+
+    items = []
+    for perf in performances:
+        year = _performance_year(perf["fetch_time"], month)
+        team = clean_team_from_title(perf["title"])
+        code = (perf["team"] or "").lower()
+        if team == CANON_GROUP and code in ("n", "h", "s", "x"):
+            team = CODE_TO_CANON[code]
+
+        upload = _pick_schedule_upload(perf, candidates, year)
+        bvid = upload["bvid"] if upload else None
+        downloaded = downloads.get(bvid) if bvid else None
+        items.append({
+            "performance_id": perf["id"],
+            "show_time": perf["show_time"],
+            "title": perf["title"],
+            "team": team,
+            "year": year,
+            "bvid": bvid,
+            "upload_title": upload["title"] if upload else None,
+            "uploaded": bool(upload),
+            "downloaded": bool(downloaded),
+            "downloaded_scope": (downloaded or {}).get("scope"),
+            "downloaded_codec": (downloaded or {}).get("codec"),
+        })
+    return {"date": date, "items": items}

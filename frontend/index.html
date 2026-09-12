@@ -204,6 +204,21 @@
                                         <span class="text-[10px] text-slate-400 group-hover:text-orange-500 transition-colors">票务</span>
                                     </div>
                                     <p class="text-xs font-bold text-slate-700 line-clamp-2 leading-tight">{{ show.title }}</p>
+                                    <div class="flex flex-wrap items-center gap-1 mt-1.5">
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded border"
+                                              :class="scheduleStatusOf(show) && scheduleStatusOf(show).uploaded ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-slate-100 text-slate-400 border-slate-200'">
+                                            {{ scheduleStatusOf(show) && scheduleStatusOf(show).uploaded ? '录播已上传' : '录播未上传' }}
+                                        </span>
+                                        <span class="text-[10px] px-1.5 py-0.5 rounded border"
+                                              :class="scheduleStatusOf(show) && scheduleStatusOf(show).downloaded ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-100 text-slate-400 border-slate-200'">
+                                            {{ scheduleStatusOf(show) && scheduleStatusOf(show).downloaded ? '已入库' + uploadScopeLabel(scheduleStatusOf(show).downloaded_scope) : '未入库' }}
+                                        </span>
+                                        <button v-if="scheduleStatusOf(show) && scheduleStatusOf(show).uploaded && !scheduleStatusOf(show).downloaded"
+                                                @click.stop.prevent="queueScheduleDownload(show)"
+                                                class="text-[10px] bg-violet-600 hover:bg-violet-700 text-white font-semibold px-2 py-0.5 rounded transition">
+                                            立即入库
+                                        </button>
+                                    </div>
                                 </a>
                                 <button @click="toggleManualSub(show.id)" 
                                         class="w-12 flex items-center justify-center rounded-lg border transition-all hover:scale-105 active:scale-95"
@@ -487,7 +502,7 @@
     </div>
 
     <script>
-        const { createApp, ref, computed, onMounted, onUnmounted } = Vue;
+        const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
         createApp({
             setup() {
@@ -618,6 +633,8 @@
                 };
 
                 const scheduleMap = ref({});
+                const scheduleStatusMap = ref({});
+                let schedulePoll = null;
                 const currentDate = new Date();
                 const currentYear = ref(currentDate.getFullYear());
                 const currentMonth = ref(currentDate.getMonth() + 1);
@@ -791,6 +808,32 @@
                     } catch (e) { console.error(e); }
                 };
 
+                // 日历卡片：某天每场公演的录播/入库状态与立即入库
+                const fetchScheduleStatus = async () => {
+                    try {
+                        const params = new URLSearchParams({ date: selectedDate.value });
+                        const res = await fetch(`${API_BASE}/schedule_status?${params.toString()}`);
+                        const data = await res.json();
+                        const map = {};
+                        (data.items || []).forEach(item => { map[item.performance_id] = item; });
+                        scheduleStatusMap.value = map;
+                    } catch (e) {}
+                };
+
+                const scheduleStatusOf = (show) => scheduleStatusMap.value[show.id] || null;
+
+                const queueScheduleDownload = async (show) => {
+                    const item = scheduleStatusOf(show);
+                    if (!item || !item.bvid || item.downloaded) return;
+                    await submitDownloads(
+                        [item.bvid],
+                        config.value.manual_download_scope || 'full',
+                        false,
+                        { [item.bvid]: item.upload_title || show.title }
+                    );
+                    fetchScheduleStatus();
+                };
+
                 const triggerScan = async () => {
                     if(isScanning.value) return;
                     try {
@@ -809,12 +852,16 @@
                     }
                 };
 
-                const submitDownloads = async (bvids, scope, force = false) => {
+                const submitDownloads = async (bvids, scope, force = false, titles = null) => {
                     const unique = [...new Set(bvids)].filter(Boolean);
                     if (unique.length === 0) return;
                     const items = unique.map(bvid => {
-                        const found = uploads.value.find(u => u.bvid === bvid);
-                        return { bvid, title: found ? found.title : "" };
+                        let title = titles && titles[bvid] ? titles[bvid] : "";
+                        if (!title) {
+                            const found = uploads.value.find(u => u.bvid === bvid);
+                            title = found ? found.title : "";
+                        }
+                        return { bvid, title };
                     });
                     uploadSubmitting.value = true;
                     try {
@@ -928,6 +975,8 @@
                     fetchConfig();
                     fetchSchedules();
                     pollInterval = setInterval(fetchDownloadQueue, 1500);
+                    fetchScheduleStatus();
+                    schedulePoll = setInterval(fetchScheduleStatus, 30000);
                     fetchEmbyStatus();
                     embyPoll = setInterval(fetchEmbyStatus, 30000);
                     fetchUploads();
@@ -939,12 +988,19 @@
                     if(pollInterval) clearInterval(pollInterval);
                     if(embyPoll) clearInterval(embyPoll);
                     if(uploadPoll) clearInterval(uploadPoll);
+                    if(schedulePoll) clearInterval(schedulePoll);
+                });
+
+                watch(selectedDate, () => {
+                    scheduleStatusMap.value = {};
+                    fetchScheduleStatus();
                 });
 
                 return {
                     activeTasks, downloadQueue, config, scanMessage, isScanning,
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
                     changeMonth, fetchDownloadQueue, triggerScan, saveConfig, toggleManualSub,
+                    scheduleStatusOf, queueScheduleDownload, fetchScheduleStatus,
                     addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
                     schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour,
                     embyStatus, embyStatusLabel,
