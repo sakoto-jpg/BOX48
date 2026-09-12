@@ -12,6 +12,7 @@ import time
 import re
 import json
 import os
+import sqlite3
 from urllib.parse import urlparse, parse_qs
 
 app = FastAPI()
@@ -50,6 +51,35 @@ API_HEADERS = {
 TEAM_CN = {"s": "S队", "n": "N队", "h": "H队", "x": "X队", "ybs": "YBS", "def": "", "ckg": "CKG", "cii": "CII", "gii": "GII"}
 
 
+def _lookup_def_label(api_date: str, bz: str) -> str:
+    """官方接口对所有非固定队伍场次返回 team=def（含新生公演与拼盘公演）。
+
+    仅当同一天存在标题含“新生/预备生”的官方投稿、且剧目名匹配时，
+    才把该场标为预备生；否则不加队伍标签，避免拼盘公演被误标成 YBS。
+    """
+    day = (api_date or "")[:10].replace("-", "")
+    if not day or not os.path.exists(SCHEDULE_DB):
+        return ""
+    plays = re.findall(r"《([^》]+)》", bz or "")
+    try:
+        conn = sqlite3.connect(SCHEDULE_DB, timeout=5)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT title FROM uploads WHERE title LIKE ?", (f"%{day}%",)
+        ).fetchall()
+        conn.close()
+    except Exception:
+        return ""
+    for row in rows:
+        title = row["title"] or ""
+        if "新生" not in title and "预备生" not in title:
+            continue
+        if plays and not any(play in title for play in plays):
+            continue
+        return "预备生"
+    return ""
+
+
 def load_local_data():
     return schedule_store.load()
 
@@ -85,9 +115,6 @@ def fetch_from_api(month_str):
         api_date = item.get("date", "")  # "2026-05-31 18:30"
         api_title = item.get("title", "").replace(" 剧场公演", "")
         team_code = item.get("team", "def")
-        # SNH48 API 对 YBS 预备生/新生公演返回 team="def"，统一转为 ybs
-        if team_code == "def":
-            team_code = "ybs"
         theatre = item.get("theatre_id_name", "SNH48星梦剧院")
         bz = item.get("bz", "")
         btn2 = item.get("btn2", "")
@@ -112,7 +139,11 @@ def fetch_from_api(month_str):
         if not ticket_id:
             ticket_id = f"api-{api_date.replace(' ', '-').replace(':', '')}-{team_code}"
 
-        team_cn = TEAM_CN.get(team_code, "")
+        # def = 非固定队伍场次（新生公演、拼盘公演等）：按同日官方投稿判断是否为预备生
+        if team_code == "def":
+            team_cn = _lookup_def_label(api_date, bz)
+        else:
+            team_cn = TEAM_CN.get(team_code, "")
         if team_cn:
             full_title = f"{date_str} {theatre} {team_cn} {bz}".strip()
         else:
