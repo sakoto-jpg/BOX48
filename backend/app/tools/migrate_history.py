@@ -21,7 +21,11 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 from datetime import datetime
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from history_store import SCHEMA  # noqa: E402
 
 VIDEO_EXT = {".mkv", ".mp4", ".ts"}
 EPISODE_RE = re.compile(r"^S\d{4}E\d{4}\s*-\s*(.+)$")
@@ -310,35 +314,6 @@ def write_report(report, report_path):
         writer.writeheader()
         writer.writerows(report["records"])
     return csv_path
-
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS schema_meta (
-  key TEXT PRIMARY KEY,
-  value TEXT
-);
-CREATE TABLE IF NOT EXISTS downloads (
-  bvid TEXT PRIMARY KEY,
-  title TEXT NOT NULL DEFAULT '',
-  codec TEXT,
-  path TEXT,
-  status TEXT NOT NULL DEFAULT 'ok',
-  path_source TEXT,
-  codec_source TEXT,
-  file_size INTEGER,
-  duration REAL,
-  team TEXT,
-  perf_date TEXT,
-  created_at TEXT,
-  updated_at TEXT
-);
-CREATE TABLE IF NOT EXISTS orphan_files (
-  path TEXT PRIMARY KEY,
-  title TEXT,
-  perf_date TEXT,
-  discovered_at TEXT
-);
-"""
 
 
 def apply_to_db(report, db_path):

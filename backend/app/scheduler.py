@@ -13,6 +13,7 @@ from nfo_builder import NfoBuilder
 from downloader import BiliDownloader
 from merger import merge_parts, is_song_part, _get_video_codec as get_video_codec
 from emby_client import EmbyClient
+from history_store import HistoryStore
 
 MC_TITLE_SUFFIX = "MC合集"  # MC模式入库标题/目录后缀；_auto_rewash 靠 path 中该串推断范围，勿改
 
@@ -32,18 +33,14 @@ class Snh48Scanner:
         self.cookie_path = cookie_path
         self.nfo_builder = NfoBuilder(config_path, base_download_path)
         self.downloader = BiliDownloader(cookie_path)
+        # 旧 download_history.txt 仅作只读备份；读写全部走 SQLite
         self.history_file = os.path.join(os.path.dirname(config_path), "download_history.txt")
-        self._ensure_history_file()
+        self.history_store = HistoryStore(os.path.join(os.path.dirname(config_path), "snh48.db"))
         self.active_tasks = {}
         self._progress_lock = threading.Lock()
         self.emby_client = None
         self._wash_failed = {}   # bvid -> 失败时间戳，洗版失败 24h 内不重试
         self._init_emby_client()
-
-    def _ensure_history_file(self):
-        if not os.path.exists(self.history_file):
-            with open(self.history_file, 'w', encoding='utf-8') as f:
-                f.write("")
 
     def _init_emby_client(self):
         """从配置文件加载 Emby 设置并初始化客户端"""
@@ -68,15 +65,11 @@ class Snh48Scanner:
         self._init_emby_client()
 
     def _is_downloaded(self, bvid: str) -> bool:
-        if not os.path.exists(self.history_file): return False
-        with open(self.history_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-            return bvid in content
+        return self.history_store.is_downloaded(bvid)
 
-    def _mark_downloaded(self, bvid: str, title: str, codec: str = '', path: str = ''):
-        # 行格式: bvid|title|codec|path（旧行为 2 字段，读取侧兼容）
-        with open(self.history_file, 'a', encoding='utf-8') as f:
-            f.write(f"{bvid}|{title}|{codec}|{path}\n")
+    def _mark_downloaded(self, bvid: str, title: str, codec: str = '',
+                         path: str = '', status: str = 'ok'):
+        self.history_store.mark_downloaded(bvid, title, codec=codec, path=path, status=status)
 
     def _match_team(self, title: str, include_disabled: bool = False) -> str:
         """匹配标题所属队伍。
@@ -544,25 +537,9 @@ class Snh48Scanner:
         preferred = self._get_preferred_codec()          # 'av01' / 'avc'
         target_codec = 'av1' if preferred == 'av01' else 'h264'
 
-        # 读历史，去重取每场最新行，只取最近 2 场
-        candidates = []
+        # 读数据库：取最近入库的 2 场（已按 bvid 去重，只有 ok 记录）
         try:
-            with open(self.history_file, 'r', encoding='utf-8') as f:
-                seen = set()
-                for line in reversed(f.read().splitlines()):
-                    line = line.strip()
-                    if not line or '|' not in line:
-                        continue
-                    parts = line.split('|', 3)
-                    if len(parts) < 4:
-                        continue   # 旧格式行无 codec/path，无法洗版
-                    bvid, title, codec, path = (p.strip() for p in parts)
-                    if not bvid or bvid in seen:
-                        continue
-                    seen.add(bvid)
-                    candidates.append((bvid, title, codec, path))
-                    if len(candidates) >= 2:
-                        break
+            candidates = self.history_store.recent(2)
         except Exception as e:
             print(f"⚠️ 洗版：读取历史失败: {e}", flush=True)
             return

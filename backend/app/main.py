@@ -282,36 +282,16 @@ def save_config(config: dict):
 
 @app.get("/api/history")
 def get_history():
-    history_file = scanner.history_file
     completed = []
-    if os.path.exists(history_file):
-        with open(history_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            seen = set()
-            # 新行格式: bvid|title|codec|path；旧行为 2 字段或裸 bvid。
-            # 倒序(新→旧)遍历并按 bvid 去重：同一场多次入库(手动补档/洗版)只显示最新一条。
-            for line in reversed(lines):
-                line = line.strip()
-                if not line:
-                    continue
-                if '|' in line:
-                    parts = line.split('|', 3)
-                    bvid = parts[0].strip()
-                    if bvid in seen:
-                        continue
-                    seen.add(bvid)
-                    entry = {
-                        "id": bvid,
-                        "title": parts[1].strip() if len(parts) > 1 else "历史导入数据",
-                    }
-                    if len(parts) > 2 and parts[2].strip():
-                        entry["codec"] = parts[2].strip()
-                    completed.append(entry)
-                else:
-                    if line in seen:
-                        continue
-                    seen.add(line)
-                    completed.append({"id": line, "title": "历史导入数据"})
+    # 数据来自 SQLite（status='ok'），新→旧；返回结构保持与旧 txt 版本一致
+    for row in scanner.history_store.list_completed():
+        entry = {
+            "id": row["bvid"],
+            "title": row["title"] or "历史导入数据",
+        }
+        if row.get("codec"):
+            entry["codec"] = row["codec"]
+        completed.append(entry)
     return {
         "completed": completed,
         "active": scanner.active_tasks
