@@ -65,20 +65,7 @@
                     <button @click="triggerScan" :disabled="isScanning" class="w-full relative bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
                         <span class="relative z-10">{{ isScanning ? '巡视指令已发送...' : '立即扫描录播更新' }}</span>
                     </button>
-                    <p class="text-xs text-slate-400 mt-3 mb-6 text-center">{{ scanMessage }}</p>
-
-                    <div class="pt-5 border-t border-slate-100">
-                        <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1">
-                            <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
-                            精准补档 (手动触发)
-                        </h3>
-                        <div class="flex flex-col gap-2">
-                            <input v-model="manualUrl" placeholder="粘贴 B 站视频链接或 BV 号..." class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 outline-none transition font-mono">
-                            <button @click="triggerManualDownload" :disabled="!manualUrl || isManualDownloading" class="w-full bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-semibold py-2.5 px-4 rounded-lg transition-all text-sm flex justify-center items-center gap-2">
-                                {{ isManualDownloading ? '任务投递中...' : '解析并入库此录播' }}
-                            </button>
-                        </div>
-                    </div>
+                    <p class="text-xs text-slate-400 mt-3 text-center">{{ scanMessage }}</p>
                 </div>
 
                 <!-- Auto Scanner 调度 -->
@@ -140,6 +127,20 @@
                         </div>
                     </div>
 
+                    <!-- 下载范围 -->
+                    <div class="mb-4 pt-4 border-t border-slate-50">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">自动入库下载范围（含立即扫描）</label>
+                        <div class="flex gap-2">
+                            <button @click="config.auto_download_scope = 'full'"
+                                :class="config.auto_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
+                            <button @click="config.auto_download_scope = 'mc'"
+                                :class="config.auto_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-2">「仅MC环节」过滤歌曲分P，仅合并 MC / 拉票 / 生日等特殊环节，标题与目录追加「MC合集」。</p>
+                    </div>
+
                     <!-- 状态 -->
                     <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
                 </div>
@@ -161,35 +162,6 @@
                             class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">H.264（兼容性最好）</button>
                     </div>
                     <p class="text-xs text-slate-400">AV1 需播放设备支持硬解；若部分分P无 AV1 源，整场自动回退 H.264 以保证分P可无损合并。仅对之后下载的录播生效。</p>
-                </div>
-
-                <!-- 下载范围 -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">下载范围</h2>
-                    </div>
-
-                    <label class="text-sm font-medium text-slate-600 block mb-2">自动入库（定时扫描）</label>
-                    <div class="flex gap-2 mb-4">
-                        <button @click="config.auto_download_scope = 'full'"
-                            :class="config.auto_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
-                        <button @click="config.auto_download_scope = 'mc'"
-                            :class="config.auto_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
-                    </div>
-
-                    <label class="text-sm font-medium text-slate-600 block mb-2">手动入库（立即扫描 / 精准补档）</label>
-                    <div class="flex gap-2 mb-2">
-                        <button @click="config.manual_download_scope = 'full'"
-                            :class="config.manual_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
-                        <button @click="config.manual_download_scope = 'mc'"
-                            :class="config.manual_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                            class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
-                    </div>
-                    <p class="text-xs text-slate-400">「仅MC环节」过滤分P标题含《》的歌曲环节，仅合并 MC / 拉票 / 生日等特殊环节为一个视频，标题与目录追加「MC合集」。同一视频只入库一次（先到先得）。仅对之后下载的录播生效。</p>
                 </div>
 
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
@@ -317,6 +289,80 @@
                     </button>
                 </div>
 
+                <!-- 投稿批量下载 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h10M4 18h10"></path></svg>
+                            <h3 class="text-lg font-bold text-slate-800">投稿批量下载</h3>
+                        </div>
+                        <span class="text-xs text-slate-400">{{ uploadStatsText }}</span>
+                    </div>
+
+                    <div class="flex gap-2 mb-3">
+                        <input v-model="uploadKeyword" @keydown.enter="searchUploads" placeholder="按关键词或 BV 号筛选，如：生日公演 / BV1SebL6KECq"
+                               class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-violet-400 outline-none">
+                        <label class="flex items-center gap-1 text-xs text-slate-500 shrink-0 cursor-pointer">
+                            <input type="checkbox" v-model="uploadOnlyMissing" class="rounded"> 只看未入库
+                        </label>
+                        <button @click="searchUploads" class="bg-slate-800 hover:bg-slate-900 text-white font-semibold px-4 rounded-lg text-sm transition">搜索</button>
+                    </div>
+
+                    <div class="overflow-y-auto no-scrollbar max-h-80 bg-slate-50 rounded-xl border border-slate-100 p-2 space-y-2">
+                        <div v-if="uploadLoading" class="text-center text-xs text-slate-400 py-6">加载中...</div>
+                        <div v-else-if="uploads.length === 0" class="text-center text-xs text-slate-400 py-6">
+                            暂无匹配投稿（投稿目录可能仍在抓取中）
+                        </div>
+                        <label v-for="item in uploads" :key="item.bvid"
+                               class="flex items-start gap-3 bg-white border border-slate-100 rounded-lg p-3 cursor-pointer hover:shadow-sm transition-shadow">
+                            <input type="checkbox" :value="item.bvid" v-model="uploadSelected" class="mt-1 rounded">
+                            <div class="flex-1 min-w-0">
+                                <a :href="'https://www.bilibili.com/video/' + item.bvid" target="_blank" @click.stop
+                                   class="text-sm font-bold text-slate-700 line-clamp-2 hover:text-violet-600" :title="item.title">{{ item.title }}</a>
+                                <div class="flex flex-wrap items-center gap-3 mt-1 text-[10px] text-slate-400 font-mono">
+                                    <span>{{ item.pub_date || '未知日期' }}</span>
+                                    <span v-if="item.duration">{{ formatDuration(item.duration) }}</span>
+                                    <span>{{ item.parts }}P</span>
+                                    <span>{{ item.bvid }}</span>
+                                    <span v-if="item.downloaded" class="text-green-600 font-semibold">✓ 已入库</span>
+                                </div>
+                            </div>
+                        </label>
+                        <button v-if="uploads.length < uploadTotal" @click="loadMoreUploads"
+                                class="w-full text-xs text-slate-500 py-2 hover:text-slate-700 transition">
+                            加载更多（剩余 {{ uploadTotal - uploads.length }} 条）
+                        </button>
+                    </div>
+
+                    <div class="mt-4 pt-4 border-t border-slate-100">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">手动下载范围（批量下载）</label>
+                        <div class="flex gap-2">
+                            <button @click="config.manual_download_scope = 'full'"
+                                :class="config.manual_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
+                            <button @click="config.manual_download_scope = 'mc'"
+                                :class="config.manual_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-2">同一录播只入库一次（先到先得）；「仅MC环节」仅合并 MC / 拉票 / 生日等特殊环节。</p>
+                    </div>
+
+                    <div class="flex items-center justify-between mt-3">
+                        <span class="text-xs text-slate-500">已选 {{ uploadSelected.length }} 条 / 匹配 {{ uploadTotal }} 条</span>
+                        <div class="flex gap-2">
+                            <button v-if="uploadBvCandidate" @click="downloadSingleBv"
+                                    :disabled="uploadSubmitting"
+                                    class="bg-white border border-violet-300 text-violet-700 hover:bg-violet-50 disabled:bg-slate-100 disabled:text-slate-400 font-semibold px-3 py-2 rounded-lg text-sm transition">
+                                下载此 BV
+                            </button>
+                            <button @click="downloadSelected" :disabled="uploadSelected.length === 0 || uploadSubmitting"
+                                    class="bg-violet-600 hover:bg-violet-700 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                                {{ uploadSubmitting ? '投递中...' : `批量下载所选（${uploadSelected.length}）` }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center gap-2 mb-6">
                         <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
@@ -419,10 +465,19 @@
                 const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, preferred_codec: "av1", auto_download_scope: "full", manual_download_scope: "full" });
                 const scanMessage = ref("");
                 const isScanning = ref(false);
-                const manualUrl = ref("");
-                const isManualDownloading = ref(false);
                 let pollInterval = null;
                 let embyPoll = null;
+
+                // 投稿批量下载（数据来自 snh48.db 的 uploads 表）
+                const uploads = ref([]);
+                const uploadTotal = ref(0);
+                const uploadLoading = ref(false);
+                const uploadKeyword = ref("");
+                const uploadOnlyMissing = ref(false);
+                const uploadSelected = ref([]);
+                const uploadStats = ref({});
+                const uploadSubmitting = ref(false);
+                let uploadPoll = null;
 
                 // Emby 连接状态(配置在 roster.yaml 中，这里仅展示状态)
                 const embyStatus = ref({ status: 'idle' });
@@ -434,6 +489,25 @@
                     if (s === 'error') return '连接失败';
                     return '未检测';
                 });
+
+                const uploadStatsText = computed(() => {
+                    const data = uploadStats.value || {};
+                    if (data.uploads === undefined) return '投稿目录同步中...';
+                    const parts = [`已获取 ${data.uploads} 条`];
+                    const queue = data.queue || {};
+                    if (queue.pending) parts.push(`待抓取 ${queue.pending}`);
+                    if (queue.failed) parts.push(`失败 ${queue.failed}`);
+                    if (data.latest_pub_date) parts.push(`最新 ${data.latest_pub_date}`);
+                    if (data.full_sync_completed) parts.push('全量完成');
+                    return parts.join(' · ');
+                });
+
+                const extractBv = (text) => {
+                    const match = String(text || "").match(/BV[0-9A-Za-z]{10}/);
+                    return match ? match[0] : "";
+                };
+
+                const uploadBvCandidate = computed(() => extractBv(uploadKeyword.value));
 
                 const scheduleMap = ref({});
                 const currentDate = new Date();
@@ -483,6 +557,48 @@
                         const data = await res.json();
                         embyStatus.value = data;
                     } catch (e) {}
+                };
+
+                const fetchUploadStats = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/uploads/stats`);
+                        uploadStats.value = await res.json();
+                    } catch (e) {}
+                };
+
+                const fetchUploads = async (append = false) => {
+                    uploadLoading.value = true;
+                    try {
+                        const params = new URLSearchParams({
+                            keyword: uploadKeyword.value || "",
+                            limit: 50,
+                            offset: append ? uploads.value.length : 0,
+                            only_missing: uploadOnlyMissing.value
+                        });
+                        const res = await fetch(`${API_BASE}/uploads?${params.toString()}`);
+                        const data = await res.json();
+                        uploadTotal.value = data.total || 0;
+                        const items = data.items || [];
+                        uploads.value = append ? uploads.value.concat(items) : items;
+                    } catch (e) {
+                        if (!append) uploads.value = [];
+                    } finally {
+                        uploadLoading.value = false;
+                    }
+                };
+
+                const searchUploads = () => {
+                    uploadSelected.value = [];
+                    fetchUploads(false);
+                };
+
+                const loadMoreUploads = () => fetchUploads(true);
+
+                const formatDuration = (seconds) => {
+                    if (!seconds && seconds !== 0) return "";
+                    const hours = Math.floor(seconds / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    return hours > 0 ? `${hours}小时${minutes}分` : `${minutes}分钟`;
                 };
 
                 const fetchConfig = async () => {
@@ -553,23 +669,30 @@
                     }
                 };
 
-                const triggerManualDownload = async () => {
-                    if (!manualUrl.value) return;
+                const submitDownloads = async (bvids) => {
+                    const unique = [...new Set(bvids)].filter(Boolean);
+                    if (unique.length === 0) return;
+                    uploadSubmitting.value = true;
                     try {
-                        isManualDownloading.value = true;
-                        const res = await fetch(`${API_BASE}/download_specific`, {
+                        const res = await fetch(`${API_BASE}/download_batch`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ url: manualUrl.value })
+                            body: JSON.stringify({ bvids: unique })
                         });
                         const data = await res.json();
-                        alert('✅ ' + data.message);
-                        manualUrl.value = ""; 
+                        alert('✅ ' + (data.message || '已投递'));
+                        uploadSelected.value = [];
                     } catch (e) {
                         alert('❌ 请求失败');
                     } finally {
-                        isManualDownloading.value = false;
+                        uploadSubmitting.value = false;
                     }
+                };
+
+                const downloadSelected = () => submitDownloads(uploadSelected.value);
+                const downloadSingleBv = () => {
+                    const bvid = uploadBvCandidate.value;
+                    if (bvid) submitDownloads([bvid]);
                 };
 
                 const saveConfig = async () => {
@@ -650,20 +773,27 @@
                     pollInterval = setInterval(fetchHistory, 1500);
                     fetchEmbyStatus();
                     embyPoll = setInterval(fetchEmbyStatus, 30000);
+                    fetchUploads();
+                    fetchUploadStats();
+                    uploadPoll = setInterval(fetchUploadStats, 15000);
                 });
 
                 onUnmounted(() => {
                     if(pollInterval) clearInterval(pollInterval);
                     if(embyPoll) clearInterval(embyPoll);
+                    if(uploadPoll) clearInterval(uploadPoll);
                 });
 
                 return {
-                    history, activeTasks, config, scanMessage, isScanning, manualUrl, isManualDownloading,
+                    history, activeTasks, config, scanMessage, isScanning,
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
-                    changeMonth, fetchHistory, triggerScan, triggerManualDownload, saveConfig, toggleManualSub,
+                    changeMonth, fetchHistory, triggerScan, saveConfig, toggleManualSub,
                     addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
                     schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour,
-                    embyStatus, embyStatusLabel
+                    embyStatus, embyStatusLabel,
+                    uploads, uploadTotal, uploadLoading, uploadKeyword, uploadOnlyMissing,
+                    uploadSelected, uploadStats, uploadStatsText, uploadSubmitting, uploadBvCandidate,
+                    searchUploads, loadMoreUploads, formatDuration, downloadSelected, downloadSingleBv
                 };
             }
         }).mount('#app')

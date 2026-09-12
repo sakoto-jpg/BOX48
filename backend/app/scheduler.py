@@ -603,8 +603,9 @@ class Snh48Scanner:
                 print(f"⚠️ 洗版异常 {bvid}: {e}", flush=True)
 
     def scan_all(self, manual: bool = False):
-        # 定时调度走「自动入库」设置；前端手动触发(manual=True)走「手动入库」设置
-        scope = self._get_download_scope('manual' if manual else 'auto')
+        # 扫描任务的下载范围统一跟随「自动入库」设置（定时扫描与前端立即扫描一致）；
+        # manual 仅表示是否由前端手动触发，用于决定是否匹配未开启自动入库的队伍。
+        scope = self._get_download_scope('auto')
         scope_label = '仅MC环节' if scope == 'mc' else '整场公演'
         print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] 全局扫描开始，下载范围: {scope_label}", flush=True)
         with open(self.config_path, 'r', encoding='utf-8') as f:

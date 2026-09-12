@@ -1,4 +1,5 @@
 import os
+import re
 import yaml
 import requests
 import datetime
@@ -6,6 +7,7 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from scheduler import Snh48Scanner
+from uploads_api import router as uploads_router
 
 app = FastAPI(title="SNH48 Downloader API")
 
@@ -16,6 +18,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(uploads_router, prefix="/api")
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
@@ -304,6 +308,29 @@ def download_specific_video(payload: dict, background_tasks: BackgroundTasks):
         return {"message": "未提供有效链接"}
     background_tasks.add_task(scanner.download_single, url)
     return {"message": "指令已投递，系统正在后台解析下载"}
+
+@app.post("/api/download_batch")
+def download_batch(payload: dict, background_tasks: BackgroundTasks):
+    """批量下载：按 BV 号依次投递，顺序执行避免并发下载。"""
+    valid = []
+    seen = set()
+    for bvid in (payload.get("bvids") or []):
+        match = re.match(r"^BV[0-9A-Za-z]{10}$", str(bvid).strip())
+        if match and match.group(0) not in seen:
+            seen.add(match.group(0))
+            valid.append(match.group(0))
+    if not valid:
+        return {"message": "未提供有效的 BV 号"}
+
+    def run_batch():
+        for bvid in valid:
+            if scanner._is_downloaded(bvid):
+                print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
+                continue
+            scanner.download_single(f"https://www.bilibili.com/video/{bvid}")
+
+    background_tasks.add_task(run_batch)
+    return {"message": f"已投递 {len(valid)} 个下载任务，将按顺序处理"}
 
 @app.get("/api/emby_status")
 def get_emby_status():
