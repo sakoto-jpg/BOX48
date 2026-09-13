@@ -49,8 +49,10 @@ def _clean_chapter_title(raw_title: str) -> str:
     输出:
       '《雪之国》《光明与黑暗》《命运齿轮》《十洲集结》'
     """
-    # 去除完整标题中「p01」「P02」之前的所有公共前缀
-    cleaned = re.sub(r'^.*?[pP]\s*\d{2,3}\s*', '', raw_title).strip()
+    # 去除完整标题中「p01」「P02」之前的所有公共前缀。
+    # 注意 p/P 前必须是非字母数字，避免把 TOP16 里的 "P16" 误当成分P号
+    # （否则会只截掉一半前缀，留下「主题生日公演20260912 p01 …」这类残段）。
+    cleaned = re.sub(r'^.*?(?<![A-Za-z0-9])[pP]\s*\d{1,3}\s*', '', raw_title).strip()
     if cleaned:
         return cleaned
     # 回退：只去除 「P1.」「P1-」等简洁前缀
