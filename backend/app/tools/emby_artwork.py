@@ -133,6 +133,48 @@ def wiki_page_images(page):
     return data.get("parse", {}).get("images", []) or []
 
 
+def wiki_wikitext(page):
+    data = http_json(WIKI_API, {
+        "action": "parse", "page": page, "prop": "wikitext",
+        "format": "json", "formatversion": 2,
+    })
+    return data.get("parse", {}).get("wikitext", "") or ""
+
+
+def parse_member_infobox(text):
+    """从成员页 Infobox 解析 theme(所属团体) 与 image(照片文件)。"""
+    theme = re.search(r"\|\s*theme\s*=\s*([^\|\n}]+)", text or "")
+    image = re.search(r"\|\s*image\s*=\s*([^\|\n}]+)", text or "")
+    return (
+        theme.group(1).strip() if theme else "",
+        image.group(1).strip() if image else "",
+    )
+
+
+def resolve_member_image(name, prefer_theme="SNH48"):
+    """按中文名找成员照片，优先所属团体为 SNH48 的页面，避免同名分团成员。
+
+    返回 (page_title, image_file)。
+    """
+    data = http_json(WIKI_API, {
+        "action": "query", "list": "search", "srsearch": name,
+        "srlimit": 6, "format": "json", "formatversion": 2,
+    })
+    hits = [h["title"] for h in data.get("query", {}).get("search", [])]
+    fallback = None
+    for title in hits:
+        if ":" in title:
+            continue
+        theme, image = parse_member_infobox(wiki_wikitext(title))
+        if not image:
+            continue
+        if theme.upper() == prefer_theme.upper():
+            return title, image
+        if fallback is None:
+            fallback = (title, image)
+    return fallback if fallback else (None, None)
+
+
 def parse_emby_config(config_path):
     """从 roster.yaml 里轻量解析 Emby 配置（避免依赖 PyYAML）。"""
     server_url, api_key, library_name = "", "", "公演直播回放"
@@ -238,8 +280,13 @@ def to_host_path(path, library_root):
 
 def step_people(args, emby):
     persons = emby.persons(args.emby_library_id)
+    cache_path = os.path.join(os.path.dirname(args.config), "assets", "member_photos.json")
+    try:
+        cache = json.load(open(cache_path, encoding="utf-8"))
+    except Exception:
+        cache = {}
     log(f"Emby 库内人物: {len(persons)}")
-    done = 0
+    updated = 0
     for person in persons:
         name = person.get("Name") or ""
         if not name or name.upper().startswith("SNH48 GROUP"):
@@ -247,30 +294,46 @@ def step_people(args, emby):
         target_dir = people_dir(args.emby_metadata, name)
         image_path = os.path.join(target_dir, "folder.jpg")
         has_image = os.path.exists(image_path) and os.path.getsize(image_path) > 5000
-        if not has_image:
-            page = wiki_search_page(name)
-            url = wiki_page_image(page) if page else None
-            log(f"  {name}: 本地无图 → 维基页面 {page} "
-                f"{'有图' if url else '未找到图片'}")
-            if url and args.apply and done < (args.limit or 10 ** 9):
+
+        page, image_file = resolve_member_image(name)
+        url = wiki_file_url(image_file) if image_file else (
+            wiki_page_image(page) if page else None)
+        cached = cache.get(name) or {}
+        needs_update = (
+            args.force_people
+            or not has_image
+            or bool(image_file and cached.get("image") and cached.get("image") != image_file)
+        )
+        log(f"  {name}: 页面={page} 图片={image_file or '未找到'} "
+            f"本地{'有图' if has_image else '无图'} "
+            f"{'→ 更新' if needs_update else '(保持)'}")
+        if url and args.apply and needs_update and updated < (args.limit or 10 ** 9):
+            try:
                 os.makedirs(target_dir, exist_ok=True)
                 with tempfile.TemporaryDirectory() as tmp:
                     raw = os.path.join(tmp, "raw")
                     try:
                         download_file(url, raw)
-                        if raw.lower().endswith(".png") or not to_jpg(raw, image_path):
-                            to_jpg(raw, image_path)
+                        to_jpg(raw, image_path)
                         log(f"    ✓ 已保存头像 {image_path}")
                         person["_new_image"] = True
+                        updated += 1
                     except Exception as exc:
                         log(f"    ✗ 下载失败: {exc}")
-            done += 1
-            time.sleep(0.3)
+            except Exception as exc:
+                log(f"    ✗ 处理失败: {exc}")
+        if url:
+            cache[name] = {"page": page, "image": image_file, "url": url}
         if args.apply and (has_image or person.get("_new_image")):
             try:
                 emby.refresh(person["Id"])
             except Exception as exc:
                 log(f"    ✗ 刷新人物失败 {name}: {exc}")
+        time.sleep(0.2)
+    if args.apply:
+        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+        with open(cache_path, "w", encoding="utf-8") as fh:
+            json.dump(cache, fh, ensure_ascii=False, indent=2)
     log("成员头像处理完成")
 
 
@@ -423,6 +486,7 @@ def main():
     parser.add_argument("--emby-token", default="")
     parser.add_argument("--limit", type=int, default=0, help="限制处理数量(测试用)")
     parser.add_argument("--apply", action="store_true", help="写入并刷新 Emby")
+    parser.add_argument("--force-people", action="store_true", help="成员头像全部重新抓取")
     args = parser.parse_args()
 
     server_url, api_key, library_name = parse_emby_config(args.config)
