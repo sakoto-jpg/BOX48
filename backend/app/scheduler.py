@@ -4,6 +4,7 @@ import re
 import shutil
 import glob
 import threading
+import sqlite3
 import yt_dlp
 import yaml
 import traceback
@@ -112,6 +113,40 @@ class Snh48Scanner:
         except Exception as e:
             print(f"⚠️ 读取下载范围配置({key})失败，回退整场: {e}", flush=True)
             return 'full'
+
+    def _lookup_cover(self, bvid: str) -> str:
+        """从官方投稿目录取 B 站封面地址（剧集缩略图用）。"""
+        try:
+            db_path = os.path.join(os.path.dirname(self.config_path), "snh48.db")
+            with sqlite3.connect(db_path, timeout=5) as conn:
+                row = conn.execute("SELECT cover FROM uploads WHERE bvid=?", (bvid,)).fetchone()
+            return row[0] if row and row[0] else ""
+        except Exception:
+            return ""
+
+    def _save_episode_thumb(self, bvid: str, base_episode_path: str, cover: str = ""):
+        """保存 B 站封面为 Emby 剧集缩略图 <剧集文件名>-thumb.jpg。"""
+        thumb_path = f"{base_episode_path}-thumb.jpg"
+        if os.path.exists(thumb_path) and os.path.getsize(thumb_path) > 5000:
+            return
+        cover = cover or self._lookup_cover(bvid)
+        if not cover:
+            return
+        try:
+            import urllib.request
+            request = urllib.request.Request(
+                cover.replace("http://", "https://"),
+                headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                  "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": "https://www.bilibili.com/",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=30) as resp, open(thumb_path, "wb") as fh:
+                fh.write(resp.read())
+            print(f"  🖼️ 已保存剧集封面: {os.path.basename(thumb_path)}", flush=True)
+        except Exception as e:
+            print(f"  ⚠️ 剧集封面保存失败: {e}", flush=True)
 
     def _rewash_flat_opts(self) -> dict:
         """洗版解析 MC 分P 用的浅层扫描选项(与 scan_and_download 同款)。"""
@@ -269,6 +304,10 @@ class Snh48Scanner:
             perf_title=perf_title,
             plot=overall_plot
         )
+
+        # 自动保存 B 站封面为 Emby 剧集缩略图（新入库无需再手动补素材）
+        cover = video_info.get('thumbnail') or (parts[0].get('thumbnail') if parts else '')
+        self._save_episode_thumb(bvid, base_episode_path, cover)
 
         perf_dir = os.path.dirname(base_episode_path)
 
