@@ -22,9 +22,11 @@ app.add_middleware(
 
 app.include_router(uploads_router, prefix="/api")
 
-# 下载等待队列（批量下载/洗版排队中，供前端「下载队列」卡片展示）
+# 下载等待队列：只放「还没轮到的任务」，正在下载的那条由 scanner.active_tasks 展示
 download_queue = []
 download_queue_lock = threading.Lock()
+download_run_lock = threading.Lock()   # 同一时间只处理一批，保证下载串行
+download_queue_seq = 0
 
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
@@ -332,6 +334,7 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
       scope: 'full' | 'mc'（不传则回退「手动入库」设置）
       force: true 表示洗版（已入库也重新下载，并清理旧范围版本）
     """
+    global download_queue_seq
     items = []
     seen = set()
     for item in (payload.get("items") or []):
@@ -353,29 +356,36 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
         scope = None
     force = bool(payload.get("force"))
 
-    def run_batch():
+    # 提交时整批入队，前端「排队中」才能看到后续任务
+    with download_queue_lock:
+        entries = []
         for item in items:
-            bvid = item["bvid"]
-            if not force and scanner._is_downloaded(bvid):
-                print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
-                continue
-            queue_entry = {
-                "bvid": bvid,
-                "title": item["title"] or bvid,
+            download_queue_seq += 1
+            entries.append({
+                "id": download_queue_seq,
+                "bvid": item["bvid"],
+                "title": item["title"] or item["bvid"],
                 "scope": scope or "auto",
                 "force": force,
-            }
-            with download_queue_lock:
-                download_queue.append(queue_entry)
-            try:
-                scanner.download_single(f"https://www.bilibili.com/video/{bvid}", scope=scope)
-            finally:
+            })
+        download_queue.extend(entries)
+
+    def run_batch():
+        # 串行处理：同一时间只跑一批，避免并发下载加剧风控风险
+        with download_run_lock:
+            for entry in entries:
+                # 轮到它了：从等待列表移除（正在下载由 active_tasks 展示，避免重复出现）
                 with download_queue_lock:
-                    download_queue[:] = [q for q in download_queue if q is not queue_entry]
+                    download_queue[:] = [q for q in download_queue if q["id"] != entry["id"]]
+                bvid = entry["bvid"]
+                if not entry["force"] and scanner._is_downloaded(bvid):
+                    print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
+                    continue
+                scanner.download_single(f"https://www.bilibili.com/video/{bvid}", scope=scope)
 
     background_tasks.add_task(run_batch)
     label = "洗版" if force else "下载"
-    return {"message": f"已投递 {len(items)} 个{label}任务，将按顺序处理"}
+    return {"message": f"已投递 {len(entries)} 个{label}任务，将按顺序处理"}
 
 @app.get("/api/emby_status")
 def get_emby_status():
