@@ -91,15 +91,15 @@ class Snh48Scanner:
                     return team_name
         return None
 
-    def _get_preferred_codec(self) -> str:
-        """读取 preferred_codec 配置。显式 'avc' → 强制 H.264；其余(含缺失、'av1')→ 优先 AV1。"""
-        try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = yaml.safe_load(f) or {}
-            return 'avc' if config.get('preferred_codec') == 'avc' else 'av01'
-        except Exception as e:
-            print(f"⚠️ 读取 preferred_codec 配置失败，回退 AVC: {e}", flush=True)
-            return 'avc'
+    # 编码策略固定为：AV1 > H.265(HEVC) > H.264(AVC)
+    CODEC_PRIORITY = ('av01', 'hevc', 'avc')
+    CODEC_VCODEC_PREFIXES = {
+        'av01': ('av01',),
+        'hevc': ('hev1', 'hvc1', 'hevc'),
+        'avc': ('avc1', 'avc3'),
+    }
+    CODEC_LABELS = {'av01': 'AV1', 'hevc': 'H.265(HEVC)', 'avc': 'H.264(AVC)'}
+    CODEC_FILE_RANK = {'h264': 0, 'hevc': 1, 'av1': 2}
 
     def _get_download_scope(self, kind: str = 'auto') -> str:
         """读取下载范围配置。kind: 'auto'|'manual'；取值 'full'|'mc'，缺失/非法/异常回退 'full'。"""
@@ -126,18 +126,18 @@ class Snh48Scanner:
             }
         }
 
-    def _probe_av1_availability(self, bvid: str, p_numbers: List[int] = None) -> bool:
-        """探测指定分P是否均提供 AV1 源。
+    def _probe_best_codec(self, bvid: str, p_numbers: List[int] = None) -> str:
+        """探测选中分P都支持的最佳编码，优先级 AV1 > H.265(HEVC) > H.264(AVC)。
 
         p_numbers: 1-based 分P号列表，None 表示探测全部。MC 模式只合并选中的
         分P，编码一致性只要求在选中集合内，故仅探测选中分P。
         分P合并要求编码一致，混编会导致合并失败。
 
-        返回 True 表示全部有 AV1；返回 False 表示确认缺源，或连续多次探测异常。
+        返回 'av01' / 'hevc' / 'avc'。连续多次探测异常时按 'avc' 兜底，
         探测异常会重试，避免把 B 站偶发抓取失败误判成“没有 AV1 源”。
         """
         if p_numbers is not None and not p_numbers:
-            return False
+            return 'avc'
         ydl_opts = {
             'cookiefile': self.cookie_path,
             'quiet': True,
@@ -153,34 +153,41 @@ class Snh48Scanner:
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
-                entries = info.get('entries') if info else None
+                # 多分P视频返回 entries；单分P视频直接返回视频信息本身
+                raw_entries = info.get('entries') if info else None
+                entries = [entry for entry in (raw_entries or []) if entry] or ([info] if info else [])
                 if not entries:
                     raise RuntimeError("未获取到分P信息")
 
-                missing_parts = []
-                for i, entry in enumerate(entries):
-                    if p_numbers is not None and (i + 1) not in p_numbers:
-                        continue
-                    if not entry or not any((f.get('vcodec') or '').startswith('av01')
-                                            for f in entry.get('formats') or []):
-                        missing_parts.append(i + 1)
-                if missing_parts:
-                    # 已确认缺源，重试也不会出现，直接整场回退 H264
-                    print(f"⚠️ 整场 AV1 探测：分P {', '.join(map(str, missing_parts))} "
-                          f"无 AV1 源，整场回退 H264", flush=True)
-                    return False
-                return True
+                selected = [
+                    entry for i, entry in enumerate(entries)
+                    if p_numbers is None or (i + 1) in p_numbers
+                ]
+                if not selected:
+                    raise RuntimeError("选中分P为空")
+
+                for codec in self.CODEC_PRIORITY:
+                    prefixes = self.CODEC_VCODEC_PREFIXES[codec]
+                    if all(
+                        any(
+                            any((f.get('vcodec') or '').lower().startswith(p) for p in prefixes)
+                            for f in (entry.get('formats') or [])
+                        )
+                        for entry in selected
+                    ):
+                        return codec
+                return 'avc'
             except Exception as e:
                 if attempt < max_attempts:
                     wait = attempt * 15
-                    print(f"⚠️ AV1 探测异常（第 {attempt}/{max_attempts} 次）: {e}；"
+                    print(f"⚠️ 编码探测异常（第 {attempt}/{max_attempts} 次）: {e}；"
                           f"{wait}s 后重试", flush=True)
                     time.sleep(wait)
                     continue
-                print(f"⚠️ AV1 探测连续 {max_attempts} 次异常，本次回退 H264"
+                print(f"⚠️ 编码探测连续 {max_attempts} 次异常，本次回退 H.264"
                       f"（后续自动洗版会再尝试）: {e}", flush=True)
-                return False
-        return False
+                return 'avc'
+        return 'avc'
 
     def _create_hook(self, bvid, p_number=None):
         lock = self._progress_lock
@@ -244,11 +251,10 @@ class Snh48Scanner:
             self.active_tasks[bvid]['p_done'] = 0
             self.active_tasks[bvid]['part_progress'] = {}
 
-        # 编码偏好：AV1 优先时先探测(MC 模式仅探测选中分P)，确保参与合并的分P编码一致
-        prefer_codec = self._get_preferred_codec()
-        if prefer_codec == 'av01' and not self._probe_av1_availability(bvid, [i + 1 for i, _ in selected]):
-            print(f"⚠️ {bvid} AV1 不可用（缺源或探测失败），本场回退 H.264(AVC) 编码下载", flush=True)
-            prefer_codec = 'avc'
+        # 编码固定策略 AV1 > H.265 > H.264：探测选中分P，确保参与合并的分P编码一致
+        prefer_codec = self._probe_best_codec(bvid, [i + 1 for i, _ in selected])
+        if prefer_codec != 'av01':
+            print(f"⚠️ {bvid} AV1 不可用，本场使用 {self.CODEC_LABELS[prefer_codec]} 编码下载", flush=True)
 
         overall_plot = video_info.get('description') or ''
         if not overall_plot and parts:
@@ -593,9 +599,7 @@ class Snh48Scanner:
 
     def _auto_rewash(self):
         """自动洗版：检查最近入库的 2 场公演(按 bvid 去重)，
-        实际文件编码与下载策略所选编码不符、且 B 站已提供目标编码源流时，自动重新下载替换。"""
-        preferred = self._get_preferred_codec()          # 'av01' / 'avc'
-        target_codec = 'av1' if preferred == 'av01' else 'h264'
+        若实际编码不是当前可用的最优编码(AV1 > H.265 > H.264)，自动重新下载替换。"""
 
         # 读数据库：取最近入库的 2 场（已按 bvid 去重，只有 ok 记录）
         try:
@@ -621,26 +625,26 @@ class Snh48Scanner:
             actual = get_video_codec(path)
             if not actual:
                 continue
-            if actual == target_codec:
+
+            probe_nums = None
+            if scope == 'mc':
+                # MC 场次只探测被选中的 MC 分P，否则某首歌曲分P无 AV1 会导致永远无法洗版
+                try:
+                    with yt_dlp.YoutubeDL(self._rewash_flat_opts()) as ydl:
+                        info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
+                    selected = _select_mc_parts(info.get('entries') or [])
+                    if not selected:
+                        print(f"  ⏭️ 洗版暂缓 {bvid}: 无MC分P", flush=True)
+                        continue
+                    probe_nums = [i + 1 for i, _ in selected]
+                except Exception as e:
+                    print(f"⚠️ 洗版 MC 分P解析失败，退回整场探测: {e}", flush=True)
+
+            target_pref = self._probe_best_codec(bvid, probe_nums)
+            target_codec = {'av01': 'av1', 'hevc': 'hevc', 'avc': 'h264'}[target_pref]
+            if self.CODEC_FILE_RANK.get(actual, 0) >= self.CODEC_FILE_RANK.get(target_codec, 0):
                 print(f"  ✓ 洗版检查 {bvid}: 文件已是 {actual}，无需洗版", flush=True)
                 continue
-            if target_codec == 'av1':
-                probe_nums = None
-                if scope == 'mc':
-                    # MC 场次只探测被选中的 MC 分P，否则某首歌曲分P无 AV1 会导致永远无法洗版
-                    try:
-                        with yt_dlp.YoutubeDL(self._rewash_flat_opts()) as ydl:
-                            info = ydl.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
-                        selected = _select_mc_parts(info.get('entries') or [])
-                        if not selected:
-                            print(f"  ⏭️ 洗版暂缓 {bvid}: 无MC分P", flush=True)
-                            continue
-                        probe_nums = [i + 1 for i, _ in selected]
-                    except Exception as e:
-                        print(f"⚠️ 洗版 MC 分P解析失败，退回整场探测: {e}", flush=True)
-                if not self._probe_av1_availability(bvid, probe_nums):
-                    print(f"  ⏭️ 洗版暂缓 {bvid}: B 站尚无 AV1 源，待下轮扫描重试", flush=True)
-                    continue
 
             if not self._match_team(title):
                 # 该场次所属队伍未开启自动入库(如手动补档的特殊公演)，不做自动洗版

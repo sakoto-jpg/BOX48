@@ -152,7 +152,7 @@ def list_uploads(
         if downloaded_scope in ("full", "mc") and join_downloads:
             where.append("d.scope = ?")
             params.append(downloaded_scope)
-        if downloaded_codec in ("av1", "h264") and join_downloads:
+        if downloaded_codec in ("av1", "hevc", "h264") and join_downloads:
             where.append("d.codec = ?")
             params.append(downloaded_codec)
         where_sql = ("WHERE " + " AND ".join(where)) if where else ""

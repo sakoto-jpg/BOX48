@@ -74,17 +74,24 @@ class BiliDownloader:
 
     def download_part(self, bvid: str, p_number: int,
                       output_path_without_ext: str, progress_callback=None,
-                      prefer_codec: str = 'avc') -> tuple[bool, str]:
+                      prefer_codec: str = 'av01') -> tuple[bool, str]:
         """下载单个分P。
 
         Args:
-            prefer_codec: 'av01' 优先 AV1 源流(体积更小)，'avc' 优先 H.264(现状)
+            prefer_codec: 'av01' 优先 AV1，'hevc' 优先 H.265，'avc' 优先 H.264；
+                          均为「首选优先 + 逐级降级」，保证能下到可用源。
 
         Returns:
             (success: bool, part_title: str) — 标题来自 yt-dlp 下载时获取的真实分P标题
         """
         if prefer_codec == 'av01':
             format_sel = ('bestvideo[vcodec^=av01]+bestaudio/'
+                          'bestvideo[vcodec^=hev1]+bestaudio/'
+                          'bestvideo[vcodec^=hvc1]+bestaudio/'
+                          'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best')
+        elif prefer_codec == 'hevc':
+            format_sel = ('bestvideo[vcodec^=hev1]+bestaudio/'
+                          'bestvideo[vcodec^=hvc1]+bestaudio/'
                           'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best')
         else:
             format_sel = 'bestvideo[vcodec^=avc]+bestaudio/bestvideo+bestaudio/best'
@@ -126,7 +133,9 @@ class BiliDownloader:
         fallback_title = f"P{p_number}"
 
         for attempt in range(1, max_retries + 1):
-            codec_label = 'AV1' if prefer_codec == 'av01' else 'H.264(AVC)'
+            codec_label = {'av01': 'AV1', 'hevc': 'H.265(HEVC)', 'avc': 'H.264(AVC)'}.get(
+                prefer_codec, prefer_codec
+            )
             print(f"▶ 开始并发切片下载: {bvid} - P{p_number} -> {output_path_without_ext} "
                   f"(编码偏好 {codec_label}，尝试 {attempt}/{max_retries})")
 
