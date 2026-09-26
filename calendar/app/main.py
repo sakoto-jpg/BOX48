@@ -13,6 +13,7 @@ import re
 import json
 import os
 import sqlite3
+import hashlib
 from urllib.parse import urlparse, parse_qs
 
 app = FastAPI()
@@ -137,7 +138,16 @@ def fetch_from_api(month_str):
             ticket_id = btn2.split("/item/")[-1].split("?")[0]
             ticket_link = f"https://shop.48.cn/tickets/item/{ticket_id}"
         if not ticket_id:
-            ticket_id = f"api-{api_date.replace(' ', '-').replace(':', '')}-{team_code}"
+            # 临时 ID 用「日期+队伍+剧目名」生成，避免官方调整场次时间时产生重复记录
+            bz_key = re.sub(r"\s+", "", bz or api_title)
+            digest = hashlib.md5(
+                f"{date_match.group(1)}{date_match.group(2)}{date_match.group(3)}"
+                f"|{team_code}|{bz_key}".encode("utf-8")
+            ).hexdigest()[:8]
+            ticket_id = (
+                f"api-{date_match.group(1)}{date_match.group(2)}{date_match.group(3)}"
+                f"-{team_code}-{digest}"
+            )
 
         # def = 非固定队伍场次（新生公演、拼盘公演等）：按同日官方投稿判断是否为预备生
         if team_code == "def":
@@ -214,9 +224,32 @@ def fetch_snh48_tickets():
         next_month = (now.replace(day=28) + timedelta(days=4)).strftime("%Y-%m")
 
         # 拉取当月和下月数据
+        fetched_months = set()
+        api_keys = set()
         for month in [current_month, next_month]:
+            fetched_months.add(int(month.split("-")[1]))
             api_items = fetch_from_api(month)
+            api_keys.update((item["date"], item["show_time"]) for item in api_items)
             merge_api_items(local_data, api_items)
+
+        # 清理当月/下月已失效的临时记录（例如官方改了场次时间导致旧记录残留）。
+        # 注意按「日期+场次时间」判断，而不是按 ID：合并逻辑对同日期同时间的
+        # 场次会沿用旧 ID，按 ID 判断会把刚更新的记录误删。
+        stale_ids = []
+        for tid, entry in list(local_data.items()):
+            if not tid.startswith("api-"):
+                continue
+            if str(entry.get("fetch_time", ""))[:4] != str(now.year):
+                continue
+            month_match = re.search(r"(\d+)月", entry.get("date", ""))
+            key = (entry.get("date", ""), entry.get("show_time", ""))
+            if (month_match and int(month_match.group(1)) in fetched_months
+                    and key not in api_keys):
+                stale_ids.append(tid)
+                local_data.pop(tid, None)
+        if stale_ids:
+            schedule_store.delete(stale_ids)
+            print(f"🧹 清理失效场次 {len(stale_ids)} 条: {', '.join(stale_ids)}", flush=True)
 
         save_local_data(local_data)
         return sorted(local_data.values(), key=sort_key, reverse=True)

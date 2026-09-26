@@ -111,3 +111,11 @@ class ScheduleStore:
                 ],
             )
             conn.commit()
+
+    def delete(self, ids: list):
+        """删除指定 id 的排期记录（用于清理已失效的临时场次）。"""
+        if not ids:
+            return
+        with self._connect() as conn:
+            conn.executemany("DELETE FROM performances WHERE id=?", [(i,) for i in ids])
+            conn.commit()
