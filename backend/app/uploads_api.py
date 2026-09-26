@@ -30,10 +30,16 @@ CATEGORY_CONDITIONS = {
 }
 
 def _upload_year_month_day(title: str, pub_date: str):
-    """从投稿标题/发布日期解析 (年, 月, 日)。"""
+    """从投稿标题/发布日期解析 (年, 月, 日)。
+
+    标题里的日期可能是官方笔误（例如 202606923 多一位），解析结果非法时
+    回退到 pub_date，避免整场排期匹配不上。
+    """
     match = re.search(r"(20\d{2})(\d{2})(\d{2})", title or "")
     if match:
-        return int(match.group(1)), int(match.group(2)), int(match.group(3))
+        year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return year, month, day
     match = re.search(r"(20\d{2})-(\d{2})-(\d{2})", pub_date or "")
     if match:
         return int(match.group(1)), int(match.group(2)), int(match.group(3))

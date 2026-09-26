@@ -19,6 +19,15 @@ from history_store import HistoryStore
 MC_TITLE_SUFFIX = "MC合集"  # MC模式入库标题/目录后缀；_auto_rewash 靠 path 中该串推断范围，勿改
 
 
+def _extract_valid_date(title: str) -> str:
+    """从标题里提取合法的 8 位公演日期；官方偶有笔误（如 202606923）时返回空。"""
+    for match in re.finditer(r"(20\d{2})(\d{2})(\d{2})", title or ""):
+        month, day = int(match.group(2)), int(match.group(3))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return match.group(0)
+    return ""
+
+
 def _select_mc_parts(parts):
     """过滤歌曲分P，返回 [(原始索引, part), ...]。
 
@@ -518,11 +527,7 @@ class Snh48Scanner:
                         v_info = ydl_full.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
                         title = v_info.get('title', '')
                         target_team = self._match_team(title, include_disabled=include_disabled)
-                        date_match = re.search(r'202\d{5}', title)
-                        if date_match:
-                            date_str = date_match.group()
-                        else:
-                            date_str = v_info.get('upload_date', '')
+                        date_str = _extract_valid_date(title) or v_info.get('upload_date', '')
 
                         if target_team and date_str and re.match(r'^\d{8}$', date_str):
                             year = date_str[:4]
@@ -567,11 +572,7 @@ class Snh48Scanner:
                     title = v_info.get('title', '')
                     self.active_tasks[bvid]['title'] = title
                     target_team = self._match_team(title, include_disabled=include_disabled)
-                    date_match = re.search(r'202\d{5}', title)
-                    if date_match:
-                        date_str = date_match.group()
-                    else:
-                        date_str = v_info.get('upload_date', '')
+                    date_str = _extract_valid_date(title) or v_info.get('upload_date', '')
 
                     if target_team and date_str and re.match(r'^\d{8}$', date_str):
                         self._process_video_info(bvid, title, v_info, target_team, date_str,
