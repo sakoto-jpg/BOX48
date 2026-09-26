@@ -145,9 +145,11 @@ def check_reminders():
             for team in config.get("teams", []):
                 # 🚀 排期提醒与"录播自动入库"解耦：只由队伍的通知开关(notify)控制
                 if team.get("notify", False):
-                    for kw in team.get("keywords", []):
-                        clean_kw = kw.replace("《", "").replace("》", "")
-                        if clean_kw in title:
+                    # 关键词和队伍名都参与匹配：日历给 def 场次补的「预备生」标签也能命中
+                    patterns = list(team.get("keywords", [])) + [team.get("name", "")]
+                    for kw in patterns:
+                        clean_kw = str(kw).replace("《", "").replace("》", "").strip()
+                        if clean_kw and clean_kw in title:
                             should_notify = True
                             break
                 if should_notify: break

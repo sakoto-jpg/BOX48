@@ -14,6 +14,7 @@ import json
 import os
 import sqlite3
 import hashlib
+import yaml
 from urllib.parse import urlparse, parse_qs
 
 app = FastAPI()
@@ -29,6 +30,7 @@ app.add_middleware(
 
 cache = {"data": [], "timestamp": 0}
 CACHE_TTL = 3600 * 24
+RETRY_COOLDOWN = 600   # 抓取失败后 10 分钟再重试（不占满 24 小时缓存）
 
 # 排期数据改用 SQLite（与下载器共用 /config/snh48.db）；
 # 原 data.json 仅作为首次启动时的种子数据。
@@ -52,32 +54,70 @@ API_HEADERS = {
 TEAM_CN = {"s": "S队", "n": "N队", "h": "H队", "x": "X队", "ybs": "YBS", "def": "", "ckg": "CKG", "cii": "CII", "gii": "GII"}
 
 
+_TRAINEE_TEAM_NAME = os.environ.get("TRAINEE_TEAM_NAME", "预备生")
+ROSTER_PATH = os.environ.get("ROSTER_PATH", "/config/roster.yaml")
+_trainee_keyword_cache = {"mtime": None, "keywords": []}
+
+
+def _load_trainee_keywords() -> list:
+    """从花名册读取预备生队伍的关键词（与下载器共用 /config/roster.yaml）。"""
+    try:
+        mtime = os.path.getmtime(ROSTER_PATH)
+    except OSError:
+        return []
+    if _trainee_keyword_cache["mtime"] == mtime:
+        return _trainee_keyword_cache["keywords"]
+    keywords = []
+    try:
+        with open(ROSTER_PATH, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+        for team in data.get("teams", []):
+            if team.get("name") == _TRAINEE_TEAM_NAME:
+                keywords = [str(k) for k in team.get("keywords", []) if str(k).strip()]
+                break
+    except Exception as exc:
+        print(f"⚠️ [Schedule] 读取预备生关键词失败: {exc}", flush=True)
+    _trainee_keyword_cache.update(mtime=mtime, keywords=keywords)
+    return keywords
+
+
+def _clean_keyword(text: str) -> str:
+    return re.sub(r"[《》\s]", "", text or "")
+
+
 def _lookup_def_label(api_date: str, bz: str) -> str:
     """官方接口对所有非固定队伍场次返回 team=def（含新生公演与拼盘公演）。
 
-    仅当同一天存在标题含“新生/预备生”的官方投稿、且剧目名匹配时，
-    才把该场标为预备生；否则不加队伍标签，避免拼盘公演被误标成 YBS。
+    判定顺序：
+    1) 同一天存在标题含“新生/预备生”的官方投稿、且剧目名匹配；
+    2) 剧目名命中花名册「预备生」队伍的关键词（配置驱动）。
+    两者都不满足则不加队伍标签，避免拼盘公演被误标。
     """
     day = (api_date or "")[:10].replace("-", "")
-    if not day or not os.path.exists(SCHEDULE_DB):
-        return ""
-    plays = re.findall(r"《([^》]+)》", bz or "")
-    try:
-        conn = sqlite3.connect(SCHEDULE_DB, timeout=5)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT title FROM uploads WHERE title LIKE ?", (f"%{day}%",)
-        ).fetchall()
-        conn.close()
-    except Exception:
-        return ""
-    for row in rows:
-        title = row["title"] or ""
-        if "新生" not in title and "预备生" not in title:
-            continue
-        if plays and not any(play in title for play in plays):
-            continue
-        return "预备生"
+    if day and os.path.exists(SCHEDULE_DB):
+        plays = re.findall(r"《([^》]+)》", bz or "")
+        try:
+            conn = sqlite3.connect(SCHEDULE_DB, timeout=5)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT title FROM uploads WHERE title LIKE ?", (f"%{day}%",)
+            ).fetchall()
+            conn.close()
+        except Exception:
+            rows = []
+        for row in rows:
+            title = row["title"] or ""
+            if "新生" not in title and "预备生" not in title:
+                continue
+            if plays and not any(play in title for play in plays):
+                continue
+            return "预备生"
+
+    # 花名册关键词兜底：覆盖“录播尚未上传”的未来场次
+    text = _clean_keyword(bz)
+    for keyword in _load_trainee_keywords():
+        if _clean_keyword(keyword) and _clean_keyword(keyword) in text:
+            return "预备生"
     return ""
 
 
@@ -91,14 +131,18 @@ def save_local_data(data):
 
 def fetch_from_api(month_str):
     """从官方 API 获取指定月份的票务/公演数据."""
-    resp = requests.post(
-        f"{API_BASE}/getticketinfo.php?gid=1",
-        headers=API_HEADERS,
-        data={"act": "choose", "date": month_str, "team": "ALL"},
-        timeout=15,
-    )
+    try:
+        resp = requests.post(
+            f"{API_BASE}/getticketinfo.php?gid=1",
+            headers=API_HEADERS,
+            data={"act": "choose", "date": month_str, "team": "ALL"},
+            timeout=15,
+        )
+    except Exception as exc:
+        print(f"⚠️ 排期接口请求失败 {month_str}: {exc}", flush=True)
+        return [], False
     if resp.status_code != 200:
-        return []
+        return [], False
 
     text = resp.text.strip()
     if text.startswith("(") and text.endswith(")"):
@@ -106,10 +150,12 @@ def fetch_from_api(month_str):
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return []
+        return [], False
 
+    if data.get("status") == "202":   # 官方返回 “no data”，请求本身是成功的
+        return [], True
     if data.get("status") != "200":
-        return []
+        return [], False
 
     results = []
     for item in data.get("desc", []):
@@ -173,7 +219,7 @@ def fetch_from_api(month_str):
             "fetch_time": datetime.now().strftime("%Y-%m-%d"),
         })
 
-    return results
+    return results, True
 
 
 def sort_key(item):
@@ -224,11 +270,12 @@ def fetch_snh48_tickets():
         next_month = (now.replace(day=28) + timedelta(days=4)).strftime("%Y-%m")
 
         # 拉取当月和下月数据
-        fetched_months = set()
+        ok_months = set()
         api_keys = set()
         for month in [current_month, next_month]:
-            fetched_months.add(int(month.split("-")[1]))
-            api_items = fetch_from_api(month)
+            api_items, ok = fetch_from_api(month)
+            if ok:
+                ok_months.add(int(month.split("-")[1]))
             api_keys.update((item["date"], item["show_time"]) for item in api_items)
             merge_api_items(local_data, api_items)
 
@@ -243,7 +290,7 @@ def fetch_snh48_tickets():
                 continue
             month_match = re.search(r"(\d+)月", entry.get("date", ""))
             key = (entry.get("date", ""), entry.get("show_time", ""))
-            if (month_match and int(month_match.group(1)) in fetched_months
+            if (month_match and int(month_match.group(1)) in ok_months
                     and key not in api_keys):
                 stale_ids.append(tid)
                 local_data.pop(tid, None)
@@ -252,11 +299,11 @@ def fetch_snh48_tickets():
             print(f"🧹 清理失效场次 {len(stale_ids)} 条: {', '.join(stale_ids)}", flush=True)
 
         save_local_data(local_data)
-        return sorted(local_data.values(), key=sort_key, reverse=True)
+        return sorted(local_data.values(), key=sort_key, reverse=True), bool(ok_months)
 
     except Exception as e:
         print(f"Error fetching data: {e}")
-        return sorted(local_data.values(), key=lambda x: x["date"], reverse=True)
+        return sorted(local_data.values(), key=lambda x: x["date"], reverse=True), False
 
 
 def enrich_status(items):
@@ -305,8 +352,9 @@ def enrich_status(items):
 async def read_item(request: Request):
     current_time = time.time()
     if current_time - cache["timestamp"] > CACHE_TTL:
-        cache["data"] = fetch_snh48_tickets()
-        cache["timestamp"] = current_time
+        data, ok = fetch_snh48_tickets()
+        cache["data"] = data
+        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
     else:
         if not cache["data"]:
             local_dict = load_local_data()
@@ -328,8 +376,9 @@ async def read_item(request: Request):
 async def get_tickets_api():
     current_time = time.time()
     if current_time - cache["timestamp"] > CACHE_TTL:
-        cache["data"] = fetch_snh48_tickets()
-        cache["timestamp"] = current_time
+        data, ok = fetch_snh48_tickets()
+        cache["data"] = data
+        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
     enrich_status(cache["data"])
     return {"status": "success", "data": cache["data"], "updated_at": cache["timestamp"]}
 
@@ -338,8 +387,9 @@ async def get_tickets_api():
 async def get_calendar_ics():
     current_time = time.time()
     if current_time - cache["timestamp"] > CACHE_TTL:
-        cache["data"] = fetch_snh48_tickets()
-        cache["timestamp"] = current_time
+        data, ok = fetch_snh48_tickets()
+        cache["data"] = data
+        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
 
     cal = Calendar()
     cal.add("prodid", "-//SNH48 Calendar API//")
