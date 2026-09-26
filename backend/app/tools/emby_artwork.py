@@ -34,6 +34,7 @@ TEAM_PAGES = {
     "TEAM SII": "Team SII",
     "TEAM X": "Team X",
     "YBS": "SNH48 Trainee",
+    "预备生": "SNH48 Trainee",
     "SNH48 GROUP": "SNH48",
     "特殊公演": "SNH48",
 }
