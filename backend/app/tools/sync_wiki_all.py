@@ -27,9 +27,12 @@ BACKUP_KEEP = 10
 BACKUP_FILES = ("roster.yaml", "performances.wiki.yaml")
 
 STEPS = (
-    ("花名册", "sync_roster_from_wiki.py"),
-    ("任职区间", "sync_member_terms_from_wiki.py"),
-    ("剧目名单", "sync_performances_from_wiki.py"),
+    # (标签, 脚本, 支持的附加参数)
+    ("花名册", "sync_roster_from_wiki.py", {"--apply", "--refresh-cache"}),
+    ("任职区间", "sync_member_terms_from_wiki.py",
+     {"--apply", "--refresh-cache", "--all-groups"}),
+    ("剧目名单", "sync_performances_from_wiki.py",
+     {"--apply", "--refresh-cache", "--all-groups"}),
 )
 RELOAD_URL = os.environ.get("RELOAD_URL", "http://127.0.0.1:8000/api/reload_metadata")
 
@@ -65,18 +68,19 @@ def main():
     parser.add_argument("--all-groups", action="store_true", help="包含未启用分团")
     args = parser.parse_args()
 
-    extra = []
+    requested = []
     if args.apply:
-        extra.append("--apply")
+        requested.append("--apply")
     if args.refresh_cache:
-        extra.append("--refresh-cache")
+        requested.append("--refresh-cache")
     if args.all_groups:
-        extra.append("--all-groups")
+        requested.append("--all-groups")
 
     if args.apply:
         backup_configs()
 
-    for label, script in STEPS:
+    for label, script, supported in STEPS:
+        extra = [flag for flag in requested if flag in supported]
         print(f"\n===== {label}：{script} =====", flush=True)
         result = subprocess.run([sys.executable, os.path.join(TOOLS_DIR, script), *extra])
         if result.returncode != 0:
