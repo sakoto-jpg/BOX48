@@ -1,0 +1,56 @@
+# 分团与队伍映射配置（阶段 1）
+#
+# groups: 分团定义。api_gid 对应官方票务接口 getticketinfo.php?gid=N；
+#         enabled=false 的分团暂不抓取排期，等阶段 5 再逐个打开。
+# teams:  队伍代码 → 规范名/外部页面映射。(group, code) 才是全局唯一键。
+groups:
+  - code: snh
+    name: SNH48
+    api_gid: 1
+    bilibili_mid: 2832224
+    enabled: true
+    trainee:
+      mode: def_keywords          # SNH48 训练生用 team=def + 关键词判定
+  - code: gnz
+    name: GNZ48
+    api_gid: 3
+    bilibili_mid: null
+    enabled: false
+    trainee:
+      mode: team_code             # GNZ 接口直接返回 gnz48预备生
+      team_code: gnz48预备生
+  - code: bej
+    name: BEJ48
+    api_gid: 2
+    bilibili_mid: null
+    enabled: false
+  - code: ckg
+    name: CKG48
+    api_gid: 5
+    bilibili_mid: null
+    enabled: false
+  - code: cgt
+    name: CGT48
+    api_gid: 6
+    bilibili_mid: null
+    enabled: false
+
+teams:
+  - { group: snh, code: n, name: TEAM NII, fandom: Team NII }
+  - { group: snh, code: h, name: TEAM HII, fandom: Team HII }
+  - { group: snh, code: s, name: TEAM SII, fandom: Team SII }
+  - { group: snh, code: x, name: TEAM X, fandom: Team X }
+  - { group: snh, code: ybs, name: 预备生, fandom: SNH48 Trainee }
+  - { group: snh, code: special, name: 特殊公演, fandom: SNH48 }
+  # 以下为阶段 5 启用分团时的占位映射
+  - { group: gnz, code: g, name: GNZ48 TEAM G, fandom: Team G }
+  - { group: gnz, code: niii, name: GNZ48 TEAM NIII, fandom: Team NIII }
+  - { group: gnz, code: z, name: GNZ48 TEAM Z, fandom: Team Z }
+  - { group: gnz, code: gnz48预备生, name: GNZ48 预备生, fandom: SNH48 Trainee }
+  - { group: bej, code: b, name: BEJ48 TEAM B, fandom: Team B }
+  - { group: bej, code: e, name: BEJ48 TEAM E, fandom: Team E }
+  - { group: bej, code: j, name: BEJ48 TEAM J, fandom: Team J }
+  - { group: ckg, code: c, name: CKG48 TEAM C, fandom: Team C }
+  - { group: ckg, code: k, name: CKG48 TEAM K, fandom: Team K }
+  - { group: cgt, code: cii, name: CGT48 TEAM CII, fandom: Team CII }
+  - { group: cgt, code: gii, name: CGT48 TEAM GII, fandom: Team GII }
