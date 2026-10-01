@@ -94,7 +94,7 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 | 3 | 训练生规则只覆盖 SNH/GNZ | `groups.yaml` | ✅ 已完成：补 BEJ/CKG/CGT 训练生队伍与关键词；票务 `union` 场次靠关键词判定 |
 | 4 | 历史队伍名写法 | `tools/wiki_client.py` | ✅ 已完成：`[[Former Team NIII]]` 归一为 Team NIII 并标记 former |
 | 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | ✅ 已完成：统一「分团前缀 + 队伍名」；`TEAM_PAGES` 覆盖五个分团并保留旧名兼容；新增 `tools/migrate_media_dirs.py` 做目录迁移 |
-| 6 | `心的旅程` 名单解析 | `tools/sync_performances_from_wiki.py` | ⏳ 待做：该剧目的成员模板结构特殊 |
+| 6 | 个别剧目缺少成员名单 | `tools/sync_performances_from_wiki.py` | ✅ 已定位：同名《心的旅程》有三场，其中 `Team B 2nd Stage`（BEJ48）引用的 `Template:B2 Performing Members` 在 wiki 上不存在，属于 wiki 侧缺失；工具已改进为逐条打印「页面 / 剧目 / 队伍 / 模板名 / 解析到的人数」 |
 | 7 | 前端分团过滤 | 阶段 4b | ⏳ 待做：接口加 `group_code`，否则标签页只能显示全局数据 |
 
 另外补了一个写入护栏：wiki 抓取出现失败（或任职区间抓到 0 条）时，三个写入型
@@ -119,6 +119,19 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 
 接入时要核对一处：`GNZ48 TEAM G` 花名册给 13 人，而 wiki 分类里在册是 14 人，
 差 1 人疑似被 `theme` 校验过滤（兼任成员的分团字段可能不同），接入时逐个核对。
+
+### 三点六、同名剧目与缺失模板（2026-10-01 修正结论）
+
+「心的旅程」在 wiki 上有三场，不要混淆：
+
+| 页面 | 归属 | 名单 |
+|---|---|---|
+| `SNH48 6th Special Stage` | 训练生（NEW 心的旅程，2026-05-01 首演） | ✅ 16 人 |
+| `Team SII 6th Stage` | SNH48 TEAM SII（2016-05-20 首演） | ✅ 18 人 |
+| `Team B 2nd Stage` | BEJ48 TEAM B（2016-10-02 首演，SII 版的复刻） | ❌ 页面引用的 `Template:B2 Performing Members` 不存在 |
+
+只有第三场拿不到名单，属于 wiki 侧缺模板；接入 BEJ48 时该剧目会退回
+`member_terms`（按年任职区间）或花名册。
 
 ## 四、需要你确认的决策
 

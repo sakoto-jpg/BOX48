@@ -87,24 +87,33 @@ def template_members(template_name: str) -> list:
 
 
 def stage_cast(text: str):
-    """返回 (首演成员页, 收官成员页)。优先读模板，模板缺失时回退到页面内 MBox。"""
+    """返回 (首演成员页, 收官成员页, 模板明细)。
+
+    优先读模板，模板缺失时回退到页面内 MBox；模板明细供日志定位
+    「页面引用了不存在的模板」这类问题。
+    """
     templates = [t for t in template_calls(text) if "performing members" in t.lower()]
     premiere_tpl = [t for t in templates if "finale" not in t.lower()]
     finale_tpl = [t for t in templates if "finale" in t.lower()]
 
     premiere, finale = [], []
+    detail = []
     if premiere_tpl or finale_tpl:
         for name in premiere_tpl:
-            premiere += template_members(name)
+            members = template_members(name)
+            detail.append({"template": name, "kind": "premiere", "members": len(members)})
+            premiere += members
         for name in finale_tpl:
-            finale += template_members(name)
-        return list(dict.fromkeys(premiere)), list(dict.fromkeys(finale))
+            members = template_members(name)
+            detail.append({"template": name, "kind": "finale", "members": len(members)})
+            finale += members
+        return list(dict.fromkeys(premiere)), list(dict.fromkeys(finale)), detail
 
     # 回退：直接扫描「Performing Members」小节
     match = re.search(r"==+\s*Performing Members\s*==+(.*?)(?=\n==[^=])", text or "", re.S)
     if match:
         premiere = mbox_members(match.group(1))
-    return premiere, finale
+    return premiere, finale, detail
 
 
 def collect_stages(team_cfg, sources, cache, report):
@@ -125,9 +134,17 @@ def collect_stages(team_cfg, sources, cache, report):
         if not title:
             report["missing_titles"].append(page)
             continue
-        premiere_pages, finale_pages = stage_cast(text)
+        premiere_pages, finale_pages, cast_detail = stage_cast(text)
         if not premiere_pages and not finale_pages:
             report["missing_cast"].append(page)
+            report["missing_cast_detail"].append({
+                "page": page,
+                "title": title,
+                "team": team_cfg.get("name", ""),
+                "templates": cast_detail
+                or [{"template": t, "kind": "-", "members": 0}
+                    for t in template_calls(text) if "performing members" in t.lower()],
+            })
         stages.append({
             "page": page,
             "title": title,
@@ -159,7 +176,8 @@ def main():
         groups_cfg = yaml.safe_load(fh) or {}
     enabled = {g.get("code") for g in groups_cfg.get("groups", []) if g.get("enabled")}
 
-    report = {"missing_pages": [], "missing_titles": [], "missing_cast": [], "stages": 0}
+    report = {"missing_pages": [], "missing_titles": [], "missing_cast": [],
+              "missing_cast_detail": [], "stages": 0}
     cache = load_cache(CACHE_PATH)
     stages = []
     for team_cfg in groups_cfg.get("teams", []):
@@ -207,7 +225,11 @@ def main():
     report["members"] = len({m for entry in entries for m in entry["members"]})
     missing = [e["title"] for e in entries if not e["members"]]
     if missing:
-        log(f"⚠️ 没有解析到成员名单的剧目: {'、'.join(missing)}")
+        log(f"⚠️ 有 {len(missing)} 个剧目没有解析到成员名单：")
+        for item in report["missing_cast_detail"]:
+            templates = "、".join(
+                f"{t['template']}（{t['members']} 人）" for t in item["templates"]) or "页面内无成员模板"
+            log(f"   - {item['page']}（{item['title']} / {item['team']}）：{templates}")
 
     parent = os.path.dirname(REPORT_PATH)
     if parent:
