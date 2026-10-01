@@ -11,7 +11,7 @@
 | 1 配置化地基 | ✅ 完成 | `groups.yaml`、三表 `group_code` 回填、日历按分团抓取 |
 | 2 花名册自动同步 | ✅ 完成 | `sync_roster_from_wiki.py`；每周一 04:30（北京时间）自动同步 |
 | 3 剧目名单 + 历史阵容 | ✅ 完成 | `member_terms` 表、`sync_performances_from_wiki.py`、NFO 三层匹配 |
-| 4 展示层 | ⏳ 待开始 | 前端筛选按配置生成、Emby 分团前缀、素材映射 |
+| 4 展示层 | 🚧 进行中 | 设计见 `docs/FRONTEND-TABS.md`；已完成历史剧集元数据重建 |
 | 5 全分团接入 | ⏳ 待开始 | 目前仅 `snh` 分团 `enabled: true` |
 
 已落地的运维入口：
@@ -20,6 +20,8 @@
   写入前自动备份 `roster.yaml` / `performances.wiki.yaml`（保留最近 10 份），
   完成后调用 `POST /api/reload_metadata` 热加载，无需重启容器。
 - 每周一 04:30（北京时间）由 cron 自动执行上述同步。
+- `python tools/rewrite_episode_metadata.py --apply --refresh`：按当前匹配规则
+  重建媒体库已有剧集的演职人员，原 NFO 备份到 `config/backups/nfo/<时间戳>/`。
 
 数据现状：`member_terms` 431 条区间 / 302 名成员；自动剧目名单 56 个剧目
 （覆盖 SNH48 四队 + 训练生公演）。`performances.yaml` 的 12 条人工配置仍然
