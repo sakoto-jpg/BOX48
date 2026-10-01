@@ -89,13 +89,36 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 
 | # | 缺口 | 位置 | 说明 |
 |---|---|---|---|
-| 1 | 投稿同步写死 SNH 账号 | `tools/sync_uploads.py`（`MID = 2832224`） | 改为遍历 `groups.yaml` 中 `enabled` 的分团，用各自 `bilibili_mid`；`sync_state` 的键要按分团区分；`uploads.group_code` 已就绪 |
-| 2 | 花名册不能自动生成新队伍 | `tools/sync_roster_from_wiki.py` | 增加 `--create-missing`：为新启用分团按 `groups.yaml` 生成 `roster.yaml` 队伍条目（关键词默认队名，成员取 wiki） |
-| 3 | 训练生规则只覆盖 SNH/GNZ | `groups.yaml` | 为 BEJ/CKG/CGT 补训练生定义；票务接口只给 `union` 的分团改用关键词判定 |
-| 4 | 历史队伍名写法 | `tools/wiki_client.py` | 队伍名匹配时剥掉 `Former ` 前缀；`class 4/8` 等噪声名登记为忽略 |
-| 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | NFO 的 `tvshow` 标题目前写死 `SNH48 {队名}`，要改成 `{分团} {队名}`；`TEAM_PAGES` 素材映射要按分团展开 |
-| 6 | `心的旅程` 名单解析 | `tools/sync_performances_from_wiki.py` | 单独适配该剧目的成员模板 |
-| 7 | 前端分团过滤 | 阶段 4b | 接口加 `group_code`，否则标签页只能显示全局数据 |
+| 1 | 投稿同步写死 SNH 账号 | `tools/sync_uploads.py` | ✅ 已完成：按分团循环，per-group 同步状态，`upload_queue.group_code`，老状态键自动迁移 |
+| 2 | 花名册不能自动生成新队伍 | `tools/sync_roster_from_wiki.py` | ✅ 已完成：`--create-missing`（配合 `--all-groups`），新条目默认 `enabled: false` |
+| 3 | 训练生规则只覆盖 SNH/GNZ | `groups.yaml` | ✅ 已完成：补 BEJ/CKG/CGT 训练生队伍与关键词；票务 `union` 场次靠关键词判定 |
+| 4 | 历史队伍名写法 | `tools/wiki_client.py` | ✅ 已完成：`[[Former Team NIII]]` 归一为 Team NIII 并标记 former |
+| 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | ⏳ 待做：`tvshow` 标题写死 `SNH48 {队名}`，要改成分团前缀；`TEAM_PAGES` 素材映射按分团展开 |
+| 6 | `心的旅程` 名单解析 | `tools/sync_performances_from_wiki.py` | ⏳ 待做：该剧目的成员模板结构特殊 |
+| 7 | 前端分团过滤 | 阶段 4b | ⏳ 待做：接口加 `group_code`，否则标签页只能显示全局数据 |
+
+另外补了一个写入护栏：wiki 抓取出现失败（或任职区间抓到 0 条）时，三个写入型
+工具会拒绝覆盖，需要 `--allow-partial` 才强行写入——避免一次网络抖动把花名册/
+任职区间/剧目名单写成残缺版本。
+
+## 三点五、自动生成新分团队伍条目的实测结果
+
+在 roster.yaml 副本上跑 `--create-missing --all-groups`，生成了 14 个新条目
+（默认 `enabled: false`，要在接入时手动打开）：
+
+| 队伍 | 成员数 | 备注 |
+|---|---|---|
+| GNZ48 TEAM G / NIII / Z | 13 / 12 / 12 | 与 wiki 分类规模一致 |
+| GNZ48 预备生 | 29 | 与 `Category:GNZ48 Trainees` 一致 |
+| BEJ48 TEAM B / E / J | 13 / 16 / 0 | TEAM J 分类只有 2 个页面且都已离队，0 人符合现状 |
+| BEJ48 预备生 | 11 | |
+| CKG48 TEAM C / K | 12 / 11 | |
+| CKG48 预备生 | 7 | |
+| CGT48 TEAM CII / GII | 5 / 0 | GII 分类只有 1 个页面，尚未成队 |
+| CGT48 预备生 | 29 | |
+
+接入时要核对一处：`GNZ48 TEAM G` 花名册给 13 人，而 wiki 分类里在册是 14 人，
+差 1 人疑似被 `theme` 校验过滤（兼任成员的分团字段可能不同），接入时逐个核对。
 
 ## 四、需要你确认的决策
 

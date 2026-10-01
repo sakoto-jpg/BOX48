@@ -81,6 +81,9 @@ def main():
 
     for label, script, supported in STEPS:
         extra = [flag for flag in requested if flag in supported]
+        if script == "sync_roster_from_wiki.py" and args.all_groups:
+            # 为未启用分团也生成 roster 条目（默认不开启自动入库）
+            extra += ["--all-groups", "--create-missing"]
         print(f"\n===== {label}：{script} =====", flush=True)
         result = subprocess.run([sys.executable, os.path.join(TOOLS_DIR, script), *extra])
         if result.returncode != 0:

@@ -102,6 +102,10 @@ def main():
     parser.add_argument("--refresh-cache", action="store_true", help="忽略缓存重新抓取")
     parser.add_argument("--allow-partial", action="store_true",
                         help="抓取有失败时也照常写入（默认拒绝，避免覆盖成不完整名单）")
+    parser.add_argument("--create-missing", action="store_true",
+                        help="为已启用分团在 roster.yaml 中生成缺失的队伍条目")
+    parser.add_argument("--all-groups", action="store_true",
+                        help="配合 --create-missing，为未启用分团也生成条目")
     args = parser.parse_args()
 
     with open(ROSTER_PATH, encoding="utf-8") as fh:
@@ -115,7 +119,8 @@ def main():
     }
     roster_teams = {team.get("name"): team for team in roster.get("teams", [])}
     cache = load_cache(CACHE_PATH)
-    report = {"teams": [], "unmapped": []}
+    report = {"teams": [], "unmapped": [], "created": []}
+    group_by_code = {g.get("code"): g for g in groups_cfg.get("groups", [])}
 
     for team_cfg in groups_cfg.get("teams", []):
         if team_cfg.get("sync_roster", True) is False:
@@ -123,9 +128,29 @@ def main():
         name = team_cfg.get("name")
         roster_team = roster_teams.get(name)
         if roster_team is None:
-            if team_cfg.get("group") in enabled_group_codes:
-                report["unmapped"].append(name)
-            continue
+            group_code = team_cfg.get("group")
+            if not args.create_missing:
+                if group_code in enabled_group_codes:
+                    report["unmapped"].append(name)
+                continue
+            # 生成新条目：默认不开启自动入库，人工确认后再打开
+            if group_code not in enabled_group_codes and not args.all_groups:
+                continue
+            new_team = {
+                "name": name,
+                "enabled": False,
+                "keywords": list(team_cfg.get("keywords") or [name]),
+                "members": [],
+                "oshis": [],
+                "audio_offset": 0,
+                "notify": False,
+            }
+            roster.setdefault("teams", []).append(new_team)
+            roster_teams[name] = new_team
+            report["created"].append(name)
+            log(f"[{name}] roster.yaml 中不存在，已生成新条目"
+                f"（分团 {group_by_code.get(group_code, {}).get('name', group_code)}）")
+            roster_team = new_team
         current = list(roster_team.get("members", []) or [])
         wiki_members, details, reason = collect_team_members(team_cfg, cache, args.refresh_cache)
         added = [m for m in wiki_members if m not in current]
