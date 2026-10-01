@@ -7,7 +7,16 @@
 - 含 SII / NII / HII / X 队关键词 → 对应队伍
 - 含「预备生」或「新生」→ 预备生
 - 其余（含联合生日公演等特殊场次、YBS 梦之门等）→ SNH48 GROUP
+
+多分团（阶段 5）：
+- 非 snh 分团按 groups.yaml 里各队伍的 keywords 匹配，返回队伍规范名
+  （如 GNZ48 TEAM G）；匹配不上时返回分团级的「XX48 GROUP」。
+- SNH 保持既有规则不变，避免影响已入库数据。
 """
+
+import re
+
+import group_config
 
 CANON_NII = "TEAM NII"
 CANON_HII = "TEAM HII"
@@ -64,3 +73,57 @@ def normalize_team(title: str, fallback: str = "") -> str:
     if fallback in FOLDER_TO_CANON:
         return FOLDER_TO_CANON[fallback]
     return CODE_TO_CANON.get(str(fallback).lower(), CANON_GROUP)
+
+
+# 分团级的兜底名称：标题里认不出具体队伍时使用
+GROUP_LABELS = {
+    "snh": CANON_GROUP,
+    "gnz": "GNZ48 GROUP",
+    "bej": "BEJ48 GROUP",
+    "ckg": "CKG48 GROUP",
+    "cgt": "CGT48 GROUP",
+}
+
+_PATTERN_CACHE = {}
+
+
+def group_label(group_code: str) -> str:
+    return GROUP_LABELS.get(group_code or "snh", CANON_GROUP)
+
+
+def _keyword_pattern(keyword: str):
+    """关键词匹配：纯 ASCII 关键词要求前后不是字母数字，避免 TEAM G 命中 TEAM GII。"""
+    pattern = _PATTERN_CACHE.get(keyword)
+    if pattern is not None:
+        return pattern
+    escaped = re.escape(keyword)
+    if re.search(r"[A-Za-z0-9]", keyword):
+        pattern = re.compile(rf"(?<![A-Za-z0-9]){escaped}(?![A-Za-z0-9])", re.I)
+    else:
+        pattern = re.compile(escaped)
+    _PATTERN_CACHE[keyword] = pattern
+    return pattern
+
+
+def match_group_team(title: str, group_code: str) -> str:
+    """按 groups.yaml 中该分团各队伍的 keywords 匹配队伍规范名，未命中返回空串。"""
+    text = title or ""
+    candidates = []
+    for team in group_config.teams():
+        if team.get("group") != group_code:
+            continue
+        for keyword in team.get("keywords") or []:
+            keyword = str(keyword).strip()
+            if keyword:
+                candidates.append((len(keyword), keyword, team.get("name", "")))
+    for _, keyword, name in sorted(candidates, key=lambda item: -item[0]):
+        if _keyword_pattern(keyword).search(text):
+            return name
+    return ""
+
+
+def resolve_team(title: str, group_code: str = "snh") -> str:
+    """按分团解析标题里的队伍；snh 沿用既有规则，其他分团走配置关键词。"""
+    if not group_code or group_code == "snh":
+        return clean_team_from_title(title)
+    return match_group_team(title, group_code) or group_label(group_code)

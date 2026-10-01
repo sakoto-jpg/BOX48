@@ -11,7 +11,7 @@ import os
 import sqlite3
 from datetime import datetime
 
-from team_utils import clean_team_from_title
+from team_utils import clean_team_from_title, resolve_team
 
 UPLOAD_SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS uploads (
 CREATE INDEX IF NOT EXISTS idx_uploads_pubdate ON uploads(pubdate DESC);
 CREATE TABLE IF NOT EXISTS upload_queue (
   bvid TEXT PRIMARY KEY,
+  group_code TEXT,
   position INTEGER,
   status TEXT NOT NULL DEFAULT 'pending',
   attempts INTEGER NOT NULL DEFAULT 0,
@@ -72,39 +73,57 @@ class UploadStore:
 
     @staticmethod
     def _migrate(conn: sqlite3.Connection):
-        """老库补列：uploads.team（按标题清洗队伍），并回填历史数据。"""
+        """老库补列：group_code / team，并回填历史数据。"""
         columns = {row[1] for row in conn.execute("PRAGMA table_info(uploads)")}
         if "team" not in columns:
             conn.execute("ALTER TABLE uploads ADD COLUMN team TEXT")
         if "group_code" not in columns:
             conn.execute("ALTER TABLE uploads ADD COLUMN group_code TEXT")
-        # 阶段 1：投稿目录目前只同步 SNH48 官方账号
+        # 阶段 1 时投稿目录只同步过 SNH48 官方账号，历史行按 snh 回填
         conn.execute(
             "UPDATE uploads SET group_code = 'snh' "
             "WHERE group_code IS NULL OR group_code = ''"
         )
+        queue_columns = {row[1] for row in conn.execute("PRAGMA table_info(upload_queue)")}
+        if "group_code" not in queue_columns:
+            conn.execute("ALTER TABLE upload_queue ADD COLUMN group_code TEXT")
+        conn.execute(
+            "UPDATE upload_queue SET group_code = 'snh' "
+            "WHERE group_code IS NULL OR group_code = ''"
+        )
+        # 阶段 5：同步状态改为按分团分键，历史全局键迁移给 snh
+        for key in ("full_sync_completed", "enumerated_at", "enumerated_count",
+                    "last_incremental_at"):
+            row = conn.execute(
+                "SELECT value FROM sync_state WHERE key=?", (key,)
+            ).fetchone()
+            if row:
+                conn.execute(
+                    "INSERT OR IGNORE INTO sync_state (key, value) VALUES (?, ?)",
+                    (f"snh:{key}", row[0]),
+                )
         rows = conn.execute(
             "SELECT bvid, title FROM uploads WHERE team IS NULL OR team = ''"
         ).fetchall()
         if rows:
             conn.executemany(
                 "UPDATE uploads SET team = ? WHERE bvid = ?",
-                [(clean_team_from_title(row[1]), row[0]) for row in rows],
+                [(resolve_team(row[1], "snh"), row[0]) for row in rows],
             )
 
     @staticmethod
     def _now() -> str:
         return datetime.now().isoformat(timespec="seconds")
 
-    def enqueue(self, bvid: str, position: int) -> bool:
+    def enqueue(self, bvid: str, position: int, group_code: str = "snh") -> bool:
         """加入抓取队列；已存在（含已抓取）返回 False。"""
         now = self._now()
         with self._connect() as conn:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO upload_queue "
-                "(bvid, position, status, attempts, created_at, updated_at) "
-                "VALUES (?, ?, 'pending', 0, ?, ?)",
-                (bvid, position, now, now),
+                "(bvid, group_code, position, status, attempts, created_at, updated_at) "
+                "VALUES (?, ?, ?, 'pending', 0, ?, ?)",
+                (bvid, group_code, position, now, now),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -116,6 +135,22 @@ class UploadStore:
             sql += f" LIMIT {int(limit)}"
         with self._connect() as conn:
             return [row[0] for row in conn.execute(sql).fetchall()]
+
+    def next_pending(self):
+        """取队首待抓取项，返回 (bvid, group_code)。"""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT bvid, group_code FROM upload_queue WHERE status = 'pending' "
+                "ORDER BY position LIMIT 1"
+            ).fetchone()
+            return (row[0], row[1] or "snh") if row else None
+
+    def pending_stats(self) -> dict:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT status, COUNT(*) FROM upload_queue GROUP BY status"
+            ).fetchall()
+            return {row[0]: row[1] for row in rows}
 
     def mark_done(self, bvid: str):
         with self._connect() as conn:
@@ -153,6 +188,7 @@ class UploadStore:
 
     def upsert_upload(self, detail: dict):
         now = self._now()
+        group_code = detail.get("group_code") or "snh"
         with self._connect() as conn:
             conn.execute(
                 """
@@ -177,10 +213,10 @@ class UploadStore:
                 """,
                 (
                     detail.get("bvid"),
-                    detail.get("group_code") or "snh",
+                    group_code,
                     detail.get("aid"),
                     detail.get("title") or "",
-                    clean_team_from_title(detail.get("title")),
+                    detail.get("team") or resolve_team(detail.get("title"), group_code),
                     detail.get("pubdate"),
                     detail.get("pub_date"),
                     detail.get("duration"),
@@ -206,6 +242,18 @@ class UploadStore:
             }
             latest = conn.execute("SELECT MAX(pub_date) FROM uploads").fetchone()[0]
         return {"uploads": uploads, "queue": queue, "latest_pub_date": latest}
+
+    def group_stats(self) -> list:
+        """按分团统计已入库数量与最新发布日期。"""
+        with self._connect() as conn:
+            return [
+                {"group_code": row[0] or "snh", "uploads": row[1],
+                 "latest_pub_date": row[2]}
+                for row in conn.execute(
+                    "SELECT group_code, COUNT(*), MAX(pub_date) FROM uploads "
+                    "GROUP BY group_code ORDER BY group_code"
+                ).fetchall()
+            ]
 
     def get_state(self, key: str):
         with self._connect() as conn:

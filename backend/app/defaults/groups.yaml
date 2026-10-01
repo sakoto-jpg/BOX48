@@ -22,7 +22,7 @@ groups:
     name: GNZ48
     theme_color: "#72c13a"        # 青苹果绿
     api_gid: 3
-    bilibili_mid: null
+    bilibili_mid: 27363163        # GNZ48官方账号
     enabled: false
     member_sources: ["GNZ48 Members", "GNZ48 Graduates", "GNZ48 Trainees"]
     trainee:
@@ -32,35 +32,36 @@ groups:
     name: BEJ48
     theme_color: "#e4007f"        # 洋红 / 茜粉
     api_gid: 2
-    bilibili_mid: null
+    bilibili_mid: 26849519        # BEJ48 官方账号
     enabled: false
     member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
     theme_color: "#f5a623"        # 琥珀黄 / 落日橙黄
     api_gid: 5
-    bilibili_mid: null
+    bilibili_mid: 174377185       # CKG48官方账号
     enabled: false
     member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
     theme_color: "#e23636"        # 烈焰红
     api_gid: 6
-    bilibili_mid: null
+    bilibili_mid: 3493138635163905  # CGT48官方账号
     enabled: false
     member_sources: ["CGT48 Members", "CGT48 Graduates", "CGT48 Trainees"]
 
 # sources: 花名册同步用的 wiki 分类；不填则默认用 Category:<fandom>
 # sync_roster: false 表示该队伍不参与花名册自动同步（如特殊公演）
 teams:
-  - { group: snh, code: n, name: TEAM NII, fandom: Team NII }
-  - { group: snh, code: h, name: TEAM HII, fandom: Team HII }
-  - { group: snh, code: s, name: TEAM SII, fandom: Team SII }
-  - { group: snh, code: x, name: TEAM X, fandom: Team X }
+  - { group: snh, code: n, name: TEAM NII, fandom: Team NII, keywords: ["TEAM NII", "N队"] }
+  - { group: snh, code: h, name: TEAM HII, fandom: Team HII, keywords: ["TEAM HII", "H队"] }
+  - { group: snh, code: s, name: TEAM SII, fandom: Team SII, keywords: ["TEAM SII", "S队"] }
+  - { group: snh, code: x, name: TEAM X, fandom: Team X, keywords: ["TEAM X", "X队"] }
   - group: snh
     code: ybs
     name: 预备生
     fandom: SNH48 Trainee
+    keywords: ["预备生", "新生"]
     sources: ["SNH48 Trainees", "SNH48 24th Generation"]
     stage_sources: ["SNH48 New Members Stages", "SNH48 Trainee Stages"]
   # cast_mode: roster —— 拼盘/特别公演没有可收录的名单，直接使用 roster.yaml
@@ -69,24 +70,45 @@ teams:
     code: special
     name: 特殊公演
     fandom: SNH48
+    keywords: ["SNH48 GROUP", "特别公演", "联合生日公演"]
     sync_roster: false
     cast_mode: roster
   # 以下为阶段 5 启用分团时的占位映射
-  - { group: gnz, code: g, name: GNZ48 TEAM G, fandom: Team G }
-  - { group: gnz, code: niii, name: GNZ48 TEAM NIII, fandom: Team NIII }
-  - { group: gnz, code: z, name: GNZ48 TEAM Z, fandom: Team Z }
+  - { group: gnz, code: g, name: GNZ48 TEAM G, fandom: Team G, keywords: ["TEAM G", "G队"] }
+  - { group: gnz, code: niii, name: GNZ48 TEAM NIII, fandom: Team NIII, keywords: ["TEAM NIII", "NIII队"] }
+  - { group: gnz, code: z, name: GNZ48 TEAM Z, fandom: Team Z, keywords: ["TEAM Z", "Z队"] }
   - group: gnz
     code: gnz48预备生
     name: GNZ48 预备生
     fandom: GNZ48 Trainee
+    keywords: ["预备生", "新生"]
     sources: ["GNZ48 Trainees"]
-  - { group: bej, code: b, name: BEJ48 TEAM B, fandom: Team B }
-  - { group: bej, code: e, name: BEJ48 TEAM E, fandom: Team E }
-  - { group: bej, code: j, name: BEJ48 TEAM J, fandom: Team J }
-  - { group: ckg, code: c, name: CKG48 TEAM C, fandom: Team C }
-  - { group: ckg, code: k, name: CKG48 TEAM K, fandom: Team K }
-  - { group: cgt, code: cii, name: CGT48 TEAM CII, fandom: Team CII }
-  - { group: cgt, code: gii, name: CGT48 TEAM GII, fandom: Team GII }
+    stage_sources: ["GNZ48 Trainee Stages"]
+  - { group: bej, code: b, name: BEJ48 TEAM B, fandom: Team B, keywords: ["TEAM B", "B队"] }
+  - { group: bej, code: e, name: BEJ48 TEAM E, fandom: Team E, keywords: ["TEAM E", "E队"] }
+  - { group: bej, code: j, name: BEJ48 TEAM J, fandom: Team J, keywords: ["TEAM J", "J队"] }
+  - group: bej
+    code: bej48预备生
+    name: BEJ48 预备生
+    fandom: BEJ48 Trainee
+    keywords: ["预备生", "新生"]
+    sources: ["BEJ48 Trainees"]
+  - { group: ckg, code: c, name: CKG48 TEAM C, fandom: Team C, keywords: ["TEAM C", "C队"] }
+  - { group: ckg, code: k, name: CKG48 TEAM K, fandom: Team K, keywords: ["TEAM K", "K队"] }
+  - group: ckg
+    code: ckg48预备生
+    name: CKG48 预备生
+    fandom: CKG48 Trainee
+    keywords: ["预备生", "新生"]
+    sources: ["CKG48 Trainees"]
+  - { group: cgt, code: cii, name: CGT48 TEAM CII, fandom: Team CII, keywords: ["TEAM CII", "CII队"] }
+  - { group: cgt, code: gii, name: CGT48 TEAM GII, fandom: Team GII, keywords: ["TEAM GII", "GII队"] }
+  - group: cgt
+    code: cgt48预备生
+    name: CGT48 预备生
+    fandom: CGT48 Trainee
+    keywords: ["预备生", "新生"]
+    sources: ["CGT48 Trainees"]
 
 # 历史/特殊队伍名 → 现有队伍：仅用于成员任职区间（member_terms）映射，
 # 不影响花名册与排期匹配

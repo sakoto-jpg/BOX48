@@ -30,10 +30,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests  # noqa: E402
 
+import group_config  # noqa: E402
 from upload_store import UploadStore  # noqa: E402
 
-MID = 2832224
-SPACE_URL = f"https://space.bilibili.com/{MID}/video"
 VIEW_API = "https://api.bilibili.com/x/web-interface/view"
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -67,22 +66,24 @@ def load_cookies(cookie_path: str) -> dict:
     return cookies
 
 
-def build_session(cookie_path: str) -> requests.Session:
+def build_session(cookie_path: str, mid: int) -> requests.Session:
     session = requests.Session()
     session.headers.update({
         "User-Agent": USER_AGENT,
-        "Referer": f"https://space.bilibili.com/{MID}/video",
+        "Referer": f"https://space.bilibili.com/{mid}/video",
         "Accept": "application/json, text/plain, */*",
     })
     session.cookies.update(load_cookies(cookie_path))
     return session
 
 
-def enumerate_bvids(cookie_path: str, list_limit: int, list_delay: float, state: dict):
+def enumerate_bvids(cookie_path: str, list_limit: int, list_delay: float, state: dict,
+                    mid: int, label: str = ""):
     """用 yt-dlp 流式枚举投稿 BV 号，边枚举边产出。
 
     state 会写入 returncode / count，供调用方判断枚举是否完整成功。
     """
+    space_url = f"https://space.bilibili.com/{mid}/video"
     cmd = [
         sys.executable, "-u", "-m", "yt_dlp",
         "--cookies", cookie_path,
@@ -92,13 +93,13 @@ def enumerate_bvids(cookie_path: str, list_limit: int, list_delay: float, state:
         "--no-warnings",
         "--no-progress",
         "--sleep-requests", str(list_delay),
-        SPACE_URL,
+        space_url,
     ]
     if list_limit:
         cmd += ["--playlist-end", str(list_limit)]
 
-    log(f"开始枚举投稿列表（{'全部' if not list_limit else f'最新 {list_limit} 条'}，"
-        f"页面请求间隔 {list_delay}s）")
+    log(f"开始枚举投稿列表{label}（{'全部' if not list_limit else f'最新 {list_limit} 条'}，"
+        f"mid={mid}，页面请求间隔 {list_delay}s）")
     proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
@@ -169,10 +170,10 @@ def process_pending(store: UploadStore, session: requests.Session, args) -> int:
     while True:
         if args.max_items and processed >= args.max_items:
             break
-        batch = store.pending(limit=1)
-        if not batch:
+        item = store.next_pending()
+        if not item:
             break
-        bvid = batch[0]
+        bvid, group_code = item
         try:
             data = fetch_detail(session, bvid)
         except RateLimited as exc:
@@ -201,6 +202,7 @@ def process_pending(store: UploadStore, session: requests.Session, args) -> int:
             continue
 
         row = to_row(data)
+        row["group_code"] = group_code
         if not args.dry_run:
             store.upsert_upload(row)
             store.mark_done(bvid)
@@ -224,10 +226,34 @@ def print_stats(store: UploadStore):
     log(f"投稿已入库: {counts['uploads']} 条，最新发布日期: {counts['latest_pub_date']}")
     log(f"抓取队列: pending={queue.get('pending', 0)} "
         f"done={queue.get('done', 0)} failed={queue.get('failed', 0)}")
-    log(f"投稿列表枚举完成: {store.get_state('enumerated_at') or '未完成'}"
-        f"（{store.get_state('enumerated_count') or '-'} 条）")
-    log(f"全量完成时间: {store.get_state('full_sync_completed') or '未完成'}")
-    log(f"上次增量同步: {store.get_state('last_incremental_at') or '从未'}")
+    for stat in store.group_stats():
+        code = stat["group_code"]
+        log(f"  [{code}] 已入库 {stat['uploads']} 条，最新 {stat['latest_pub_date'] or '-'}"
+            f"；枚举完成 {store.get_state(f'{code}:enumerated_at') or '未完成'}"
+            f"；全量完成 {store.get_state(f'{code}:full_sync_completed') or '未完成'}"
+            f"；上次增量 {store.get_state(f'{code}:last_incremental_at') or '从未'}")
+
+
+def target_groups(args) -> list:
+    """返回需要同步的分团 [(code, name, mid)]。
+
+    默认只同步 enabled=true 的分团；用 --group 显式指定时，即使未启用也会
+    同步（接入前先试跑用）。
+    """
+    wanted = {code.lower() for code in (args.group or [])}
+    targets = []
+    for group in group_config.groups():
+        code = group.get("code")
+        mid = group.get("bilibili_mid")
+        if not mid:
+            continue
+        if wanted:
+            if code not in wanted:
+                continue
+        elif not group.get("enabled"):
+            continue
+        targets.append((code, group.get("name", code), int(mid)))
+    return targets
 
 
 def run(args) -> int:
@@ -241,51 +267,66 @@ def run(args) -> int:
         reset = store.reset_failed()
         log(f"已重置失败记录 {reset} 条")
 
-    session = build_session(args.cookie)
+    targets = target_groups(args)
+    if not targets:
+        log("没有已启用且配置了 bilibili_mid 的分团，未做任何事"
+            "（检查 groups.yaml 的 enabled 与 bilibili_mid）")
+        return 0
+    log(f"本次同步分团: {'、'.join(f'{name}({code})' for code, name, _ in targets)}")
 
-    if args.mode == "full":
-        if not args.force_enumerate and (
-            store.get_state("full_sync_completed") or store.get_state("enumerated_at")
-        ):
-            log("投稿列表已枚举完成，直接续抓未完成的详情")
-            enumeration_ok = True
-        else:
-            new_count = 0
-            total = 0
+    session = build_session(args.cookie, targets[0][2])
+    enumeration_ok = True
+
+    for code, name, mid in targets:
+        label = f" · {name}"
+        if args.mode == "full":
+            done_key, enumerated_key = f"{code}:full_sync_completed", f"{code}:enumerated_at"
+            if not args.force_enumerate and (
+                store.get_state(done_key) or store.get_state(enumerated_key)
+            ):
+                log(f"[{code}] 投稿列表已枚举完成，跳过枚举")
+                continue
+            new_count = total = 0
             state = {}
-            for bvid, index in enumerate_bvids(args.cookie, 0, args.list_delay, state):
+            for bvid, index in enumerate_bvids(args.cookie, 0, args.list_delay, state, mid, label):
                 total += 1
-                if not args.dry_run and store.enqueue(bvid, index):
+                if not args.dry_run and store.enqueue(bvid, index, code):
                     new_count += 1
                 if total % 500 == 0:
-                    log(f"枚举中：已发现 {total} 条，新入队 {new_count} 条")
-            enumeration_ok = state.get("returncode") == 0
-            if enumeration_ok and not args.dry_run:
-                store.set_state("enumerated_at", datetime.now().isoformat(timespec="seconds"))
-                store.set_state("enumerated_count", str(total))
-            log(f"枚举完成：共 {total} 条，新入队 {new_count} 条")
-    else:
-        total = 0
-        new_count = 0
-        state = {}
-        for bvid, index in enumerate_bvids(args.cookie, args.latest, args.list_delay, state):
-            total += 1
-            if not args.dry_run and store.enqueue(bvid, index):
-                new_count += 1
-        enumeration_ok = state.get("returncode") == 0
-        log(f"增量枚举完成：检查最新 {total} 条，新入队 {new_count} 条")
+                    log(f"[{code}] 枚举中：已发现 {total} 条，新入队 {new_count} 条")
+            group_ok = state.get("returncode") == 0
+            enumeration_ok = enumeration_ok and group_ok
+            if group_ok and not args.dry_run:
+                store.set_state(f"{code}:enumerated_at", datetime.now().isoformat(timespec="seconds"))
+                store.set_state(f"{code}:enumerated_count", str(total))
+            log(f"[{code}] 枚举完成：共 {total} 条，新入队 {new_count} 条")
+        else:
+            total = new_count = 0
+            state = {}
+            for bvid, index in enumerate_bvids(args.cookie, args.latest, args.list_delay,
+                                               state, mid, label):
+                total += 1
+                if not args.dry_run and store.enqueue(bvid, index, code):
+                    new_count += 1
+            if state.get("returncode") != 0:
+                enumeration_ok = False
+            log(f"[{code}] 增量枚举完成：检查最新 {total} 条，新入队 {new_count} 条")
 
     processed = process_pending(store, session, args)
     log(f"本次处理完成 {processed} 条")
 
     if not args.dry_run:
-        if args.mode == "full" and enumeration_ok and not store.pending(limit=1):
-            store.set_state("full_sync_completed", datetime.now().isoformat(timespec="seconds"))
-            log("🎉 全量同步完成")
-        elif args.mode == "full" and not enumeration_ok:
-            log("⚠️ 本次枚举未完整成功，暂不标记全量完成；稍后重跑会自动继续")
-        if args.mode == "incremental":
-            store.set_state("last_incremental_at", datetime.now().isoformat(timespec="seconds"))
+        for code, _name, _mid in targets:
+            if args.mode == "full":
+                if enumeration_ok and not store.pending(limit=1):
+                    store.set_state(f"{code}:full_sync_completed",
+                                    datetime.now().isoformat(timespec="seconds"))
+                    log(f"🎉 [{code}] 全量同步完成")
+                elif not enumeration_ok:
+                    log(f"⚠️ [{code}] 本次枚举未完整成功，暂不标记全量完成；重跑会自动继续")
+            else:
+                store.set_state(f"{code}:last_incremental_at",
+                                datetime.now().isoformat(timespec="seconds"))
     return 0
 
 
@@ -306,6 +347,8 @@ def main():
     parser.add_argument("--force-enumerate", action="store_true", help="全量已完成也重新枚举")
     parser.add_argument("--reset-failed", action="store_true", help="把 failed 重新置为 pending")
     parser.add_argument("--stats", action="store_true", help="只打印进度统计")
+    parser.add_argument("--group", action="append",
+                        help="只同步指定分团代码（可重复，默认所有已启用分团）")
     parser.add_argument("--dry-run", action="store_true", help="不写数据库，只走流程")
     args = parser.parse_args()
 
