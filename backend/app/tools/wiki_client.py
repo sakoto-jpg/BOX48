@@ -229,3 +229,60 @@ def get_member(page, cache=None, refresh=False, cache_path: str = None):
         cache[page] = {"ts": time.time(), "v": CACHE_VERSION, "data": info}
     time.sleep(0.5)
     return info
+
+
+def resolve_chinese_names(pages, cache=None, refresh=False, chunk=50):
+    """批量把 wiki 页面标题解析成中文名（每批最多 50 个标题，单次请求）。
+
+    未命中缓存的页面会用 action=query&prop=revisions 批量取回，
+    比逐页 action=parse 快很多，同时把结果写回缓存。
+    """
+    cache = cache if cache is not None else load_cache()
+    names = {}
+    missing = []
+    for page in pages:
+        entry = cache.get(page)
+        if (entry and not refresh and entry.get("v") == CACHE_VERSION
+                and time.time() - entry.get("ts", 0) < CACHE_TTL):
+            data = entry.get("data") or {}
+            if data.get("chinese"):
+                names[page] = clean_name(data["chinese"])
+                continue
+        missing.append(page)
+
+    missing = list(dict.fromkeys(missing))
+    for start in range(0, len(missing), chunk):
+        batch = missing[start:start + chunk]
+        log(f"  解析成员页 {min(start + chunk, len(missing))}/{len(missing)} ...")
+        data = wiki_api({
+            "action": "query", "titles": "|".join(batch),
+            "prop": "revisions", "rvprop": "content", "rvslots": "main",
+        })
+        for item in data.get("query", {}).get("pages", []):
+            title = item.get("title", "")
+            revisions = item.get("revisions") or []
+            content = ""
+            if revisions:
+                content = ((revisions[0].get("slots") or {}).get("main") or {}).get("content", "")
+            info = parse_member_page(content) if content else {}
+            if cache is not None:
+                cache[title] = {"ts": time.time(), "v": CACHE_VERSION, "data": info}
+            if info.get("chinese"):
+                names[title] = info["chinese"]
+        time.sleep(0.5)
+    return names
+
+
+def template_calls(text):
+    """返回页面里引用的模板名列表（形如 NII7 Performing Members）。"""
+    return re.findall(r"\{\{\s*([^|{}\n]+?)\s*\}\}", text or "")
+
+
+def mbox_members(text):
+    """解析 MBox 模板里的成员页标题：{{MBox|Team NII|Bai XinYu|...|image}}。"""
+    members = []
+    for call in re.finditer(r"\{\{\s*MBox\s*((?:\|[^|{}\n]*)+)\}\}", text or "", re.I):
+        parts = [part.strip() for part in call.group(1).split("|")[1:]]
+        if len(parts) >= 2 and parts[1] and parts[1] not in members:
+            members.append(parts[1])
+    return members
