@@ -29,6 +29,28 @@ WIKI_API = "https://snh48.fandom.com/api.php"
 
 # 媒体库队伍目录 → Fandom 页面
 TEAM_PAGES = {
+    # 媒体库目录统一带分团前缀（阶段 4/5）
+    "SNH48 TEAM NII": "Team NII",
+    "SNH48 TEAM HII": "Team HII",
+    "SNH48 TEAM SII": "Team SII",
+    "SNH48 TEAM X": "Team X",
+    "SNH48 预备生": "SNH48 Trainee",
+    "SNH48 特殊公演": "SNH48",
+    "GNZ48 TEAM G": "Team G",
+    "GNZ48 TEAM NIII": "Team NIII",
+    "GNZ48 TEAM Z": "Team Z",
+    "GNZ48 预备生": "GNZ48 Trainee",
+    "BEJ48 TEAM B": "Team B",
+    "BEJ48 TEAM E": "Team E",
+    "BEJ48 TEAM J": "Team J",
+    "BEJ48 预备生": "BEJ48 Trainee",
+    "CKG48 TEAM C": "Team C",
+    "CKG48 TEAM K": "Team K",
+    "CKG48 预备生": "CKG48 Trainee",
+    "CGT48 TEAM CII": "Team CII",
+    "CGT48 TEAM GII": "Team GII",
+    "CGT48 预备生": "CGT48 Trainee",
+    # 兼容旧目录名（迁移前后都能跑）
     "TEAM NII": "Team NII",
     "TEAM HII": "Team HII",
     "TEAM SII": "Team SII",

@@ -20,6 +20,7 @@ from team_utils import (
     CANON_SII,
     CANON_TRAINEE,
     CANON_X,
+    canon_from_dir,
     normalize_team,
 )
 
@@ -64,7 +65,8 @@ def _derive_team(path: Optional[str]) -> Optional[str]:
     rest = path[len("/downloads/"):]
     if "/" not in rest:
         return None
-    return rest.split("/", 1)[0]
+    # 目录名可能是 SNH48 TEAM NII 这种带分团前缀的规范形式
+    return canon_from_dir(rest.split("/", 1)[0]) or rest.split("/", 1)[0]
 
 
 def _derive_date(title: str, path: Optional[str]) -> Optional[str]:

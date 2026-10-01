@@ -93,7 +93,7 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 | 2 | 花名册不能自动生成新队伍 | `tools/sync_roster_from_wiki.py` | ✅ 已完成：`--create-missing`（配合 `--all-groups`），新条目默认 `enabled: false` |
 | 3 | 训练生规则只覆盖 SNH/GNZ | `groups.yaml` | ✅ 已完成：补 BEJ/CKG/CGT 训练生队伍与关键词；票务 `union` 场次靠关键词判定 |
 | 4 | 历史队伍名写法 | `tools/wiki_client.py` | ✅ 已完成：`[[Former Team NIII]]` 归一为 Team NIII 并标记 former |
-| 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | ⏳ 待做：`tvshow` 标题写死 `SNH48 {队名}`，要改成分团前缀；`TEAM_PAGES` 素材映射按分团展开 |
+| 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | ✅ 已完成：统一「分团前缀 + 队伍名」；`TEAM_PAGES` 覆盖五个分团并保留旧名兼容；新增 `tools/migrate_media_dirs.py` 做目录迁移 |
 | 6 | `心的旅程` 名单解析 | `tools/sync_performances_from_wiki.py` | ⏳ 待做：该剧目的成员模板结构特殊 |
 | 7 | 前端分团过滤 | 阶段 4b | ⏳ 待做：接口加 `group_code`，否则标签页只能显示全局数据 |
 
@@ -124,10 +124,11 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 
 1. **先接哪个分团**：建议 GNZ48（账号最活跃、wiki 覆盖最全、粉丝最多），
    跑通一遍后再批量复制到其余三个。
-2. **Emby 目录/系列命名**：现约定「单库 + 分团前缀」，但 SNH 现有目录是
-   `TEAM NII` 这种不带前缀的形式。建议新分团用 `GNZ48 TEAM G`，SNH 保持原样
-   （SNH48 是默认分团，改目录会触发全库重扫）；如需统一前缀再单独安排一次
-   目录迁移。
+2. **Emby 目录/系列命名**：✅ 已定案并落地——统一用「分团前缀 + 队伍名」，
+   例如 `SNH48 TEAM NII`、`SNH48 预备生`、`SNH48 特殊公演`、`GNZ48 TEAM G`。
+   旧的 `TEAM NII` / `预备生` / `特殊公演` / `SNH48 GROUP` 已由
+   `tools/migrate_media_dirs.py` 改名（`SNH48 GROUP` 合并进 `SNH48 特殊公演`），
+   downloads / orphan_files 的路径同步更新，Emby 已触发整库重扫。
 3. **存储容量**：新增四个分团的录播，量级大约是现在的 2～4 倍，需要确认
    媒体库空间。
 4. **下载优先级**：多分团同时更新时是否要限制并发（当前是全局串行的单队列，

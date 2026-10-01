@@ -72,6 +72,9 @@ def normalize_team(title: str, fallback: str = "") -> str:
         return team
     if fallback in FOLDER_TO_CANON:
         return FOLDER_TO_CANON[fallback]
+    canon = canon_from_dir(str(fallback))
+    if canon:
+        return canon
     return CODE_TO_CANON.get(str(fallback).lower(), CANON_GROUP)
 
 
@@ -127,3 +130,43 @@ def resolve_team(title: str, group_code: str = "snh") -> str:
     if not group_code or group_code == "snh":
         return clean_team_from_title(title)
     return match_group_team(title, group_code) or group_label(group_code)
+
+
+# ── 媒体库目录命名（阶段 4/5）：统一为「分团前缀 + 队伍名」 ──────────────
+#   SNH48 TEAM NII / SNH48 预备生 / SNH48 特殊公演 / GNZ48 TEAM G ...
+GROUP_PREFIXES = {
+    "snh": "SNH48",
+    "gnz": "GNZ48",
+    "bej": "BEJ48",
+    "ckg": "CKG48",
+    "cgt": "CGT48",
+}
+
+
+def media_dir_name(team_name: str, group_code: str = "snh") -> str:
+    """队伍在媒体库里的目录名；已带分团前缀的原样返回。"""
+    prefix = GROUP_PREFIXES.get(group_code or "snh", "SNH48")
+    if not team_name:
+        return prefix
+    if team_name.startswith(prefix + " ") or team_name == prefix:
+        return team_name
+    return f"{prefix} {team_name}"
+
+
+def parse_media_dir(dir_name: str) -> tuple:
+    """目录名 → (分团代码, 去掉前缀的队伍名)；认不出前缀时按 snh 处理。"""
+    name = (dir_name or "").strip()
+    for code, prefix in GROUP_PREFIXES.items():
+        if name.startswith(prefix + " "):
+            return code, name[len(prefix) + 1:].strip()
+    return "snh", name
+
+
+def canon_from_dir(dir_name: str) -> str:
+    """媒体目录名 → 规范队伍名（SNH48 TEAM NII → TEAM NII）。"""
+    _, team = parse_media_dir(dir_name)
+    if team in FOLDER_TO_CANON:
+        return FOLDER_TO_CANON[team]
+    if team.upper() in CODE_TO_CANON:
+        return CODE_TO_CANON[team.upper()]
+    return ""

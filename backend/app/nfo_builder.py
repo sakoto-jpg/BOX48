@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
 import group_config
-from team_utils import CODE_TO_CANON, FOLDER_TO_CANON
+from team_utils import CODE_TO_CANON, FOLDER_TO_CANON, media_dir_name
 
 
 def canon_team(name: str) -> str:
@@ -234,7 +234,10 @@ class NfoBuilder:
 
     # 🚀 路线一：移除了 p_number 和 part_title 参数，整场公演共用一个 NFO
     def build_metadata(self, team_name: str, year: str, date_str: str, perf_title: str, plot: str):
-        show_dir = os.path.join(self.base_download_path, team_name)
+        # 媒体库目录统一带分团前缀：SNH48 TEAM NII / GNZ48 TEAM G ...
+        team_cfg = self._team_config(team_name)
+        dir_name = media_dir_name(team_name, team_cfg.get("group") or "snh")
+        show_dir = os.path.join(self.base_download_path, dir_name)
         season_dir = os.path.join(show_dir, f"Season {year}")
         
         # 建立单场公演独立文件夹
@@ -246,7 +249,7 @@ class NfoBuilder:
         tvshow_nfo_path = os.path.join(show_dir, "tvshow.nfo")
         if not os.path.exists(tvshow_nfo_path):
             tvshow = ET.Element("tvshow")
-            ET.SubElement(tvshow, "title").text = f"SNH48 {team_name}"
+            ET.SubElement(tvshow, "title").text = dir_name
             with open(tvshow_nfo_path, "w", encoding="utf-8") as f:
                 f.write(self._prettify_xml(tvshow))
 
