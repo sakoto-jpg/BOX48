@@ -238,7 +238,8 @@ def target_groups(args) -> list:
     """返回需要同步的分团 [(code, name, mid)]。
 
     默认只同步 enabled=true 的分团；用 --group 显式指定时，即使未启用也会
-    同步（接入前先试跑用）。
+    同步（接入前先试跑用）。groups.yaml 里 sync_uploads=false 的分团会被
+    跳过（排期与花名册已接入、但投稿抓取排队中），显式 --group 可覆盖。
     """
     wanted = {code.lower() for code in (args.group or [])}
     targets = []
@@ -250,8 +251,11 @@ def target_groups(args) -> list:
         if wanted:
             if code not in wanted:
                 continue
-        elif not group.get("enabled"):
-            continue
+        else:
+            if not group.get("enabled"):
+                continue
+            if group.get("sync_uploads") is False:
+                continue
         targets.append((code, group.get("name", code), int(mid)))
     return targets
 

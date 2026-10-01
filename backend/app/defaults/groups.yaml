@@ -7,6 +7,8 @@
 #         theme_color 是前端标签页主题色（十六进制）。官方未给色号，这里取
 #         近似值：SNH 浅水蓝 / BEJ 洋红·茜粉 / GNZ 青苹果绿 /
 #         CKG 琥珀黄·落日橙黄 / CGT 烈焰红。
+#         sync_uploads=false 表示「排期与花名册已接入，但投稿目录暂不抓取」，
+#         用于分团逐个上线时排队（--group 显式指定时不受此开关限制）。
 # teams:  队伍代码 → 规范名/外部页面映射。(group, code) 才是全局唯一键。
 groups:
   - code: snh
@@ -24,6 +26,7 @@ groups:
     api_gid: 3
     bilibili_mid: 27363163        # GNZ48官方账号
     enabled: true                 # 阶段 5：2026-10-01 开启（队伍自动入库开关仍在 roster.yaml 单独控制）
+    sync_uploads: true
     member_sources: ["GNZ48 Members", "GNZ48 Graduates", "GNZ48 Trainees"]
     trainee:
       mode: team_code             # GNZ 接口直接返回 gnz48预备生
@@ -33,21 +36,24 @@ groups:
     theme_color: "#e4007f"        # 洋红 / 茜粉
     api_gid: 2
     bilibili_mid: 26849519        # BEJ48 官方账号
-    enabled: false
+    enabled: true                 # 2026-10-01 开启排期与花名册
+    sync_uploads: false           # 投稿抓取等 GNZ 全量跑完后再开
     member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
     theme_color: "#f5a623"        # 琥珀黄 / 落日橙黄
     api_gid: 5
     bilibili_mid: 174377185       # CKG48官方账号
-    enabled: false
+    enabled: true                 # 2026-10-01 开启排期与花名册
+    sync_uploads: false           # 投稿抓取等 GNZ 全量跑完后再开
     member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
     theme_color: "#e23636"        # 烈焰红
     api_gid: 6
     bilibili_mid: 3493138635163905  # CGT48官方账号
-    enabled: false
+    enabled: true                 # 2026-10-01 开启排期与花名册
+    sync_uploads: false           # 投稿抓取等 GNZ 全量跑完后再开
     member_sources: ["CGT48 Members", "CGT48 Graduates", "CGT48 Trainees"]
 
 # sources: 花名册同步用的 wiki 分类；不填则默认用 Category:<fandom>

@@ -240,7 +240,9 @@ def merge_api_items(local_data, api_items):
     """将 API 数据合并到本地数据中."""
     time_index = {}
     for tid, entry in local_data.items():
-        key = (entry["date"], entry.get("show_time", ""))
+        # 去重键必须带分团：不同分团同一天同一时间开演是常态，
+        # 否则后一个分团会把前一个分团的场次覆盖掉
+        key = (entry.get("group_code") or "snh", entry["date"], entry.get("show_time", ""))
         time_index[key] = tid
 
     for item in api_items:
@@ -250,7 +252,7 @@ def merge_api_items(local_data, api_items):
         }
 
         tid = entry["id"]
-        time_key = (entry["date"], entry["show_time"])
+        time_key = (entry.get("group_code") or "snh", entry["date"], entry["show_time"])
 
         if tid in local_data:
             local_data[tid].update(entry)

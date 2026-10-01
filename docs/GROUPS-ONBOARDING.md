@@ -71,6 +71,9 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 
 1. **配置**：`groups.yaml` 填 `bilibili_mid`，把 `enabled` 置为 `true`；
    补该分团的训练生队伍定义（`trainee.mode` / 关键词）。
+   `enabled` 只决定「排期 + 花名册 + 前端标签页」；投稿抓取由
+   `sync_uploads` 单独控制（`false` = 排队中，等前面分团跑完再打开），
+   这样多个分团可以错峰上线。
 2. **花名册**：在 `roster.yaml` 生成该分团的队伍条目（名称、关键词、
    成员、`enabled`、`notify`），执行一次 `sync_wiki_all.py --apply`。
 3. **任职区间 + 剧目名单**：同上一条命令会一并同步；检查
@@ -79,6 +82,9 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
    注意日历服务有 24 小时内存缓存（`CACHE_TTL`），**新增分团后要重启一次
    `snh48-calendar` 容器**才会立刻抓取；否则要等缓存过期。
    重启后确认 `/api/tickets` 与 ICS 里出现新分团（GNZ48 实测 12 条）。
+   另外日历服务是**镜像内代码 + 只挂载 /config**，改代码后必须
+   `docker compose build snh48-calendar && docker compose up -d snh48-calendar`，
+   单纯 restart 不会加载新代码。
 5. **投稿目录**：投稿同步需要按分团循环（见下面的代码缺口 2），第一次
    全量抓取会很久，之后每天增量 10 条。
 6. **下载入库**：确认标题 → 队伍的匹配（该分团的 `keywords`）、目录结构、
@@ -98,6 +104,7 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
 | 5 | Emby 命名 | `nfo_builder.py`、`tools/emby_artwork.py` | ✅ 已完成：统一「分团前缀 + 队伍名」；`TEAM_PAGES` 覆盖五个分团并保留旧名兼容；新增 `tools/migrate_media_dirs.py` 做目录迁移 |
 | 6 | 个别剧目缺少成员名单 | `tools/sync_performances_from_wiki.py` | ✅ 已定位：同名《心的旅程》有三场，其中 `Team B 2nd Stage`（BEJ48）引用的 `Template:B2 Performing Members` 在 wiki 上不存在，属于 wiki 侧缺失；工具已改进为逐条打印「页面 / 剧目 / 队伍 / 模板名 / 解析到的人数」 |
 | 7 | 前端分团过滤 | 阶段 4b | ⏳ 待做：接口加 `group_code`，否则标签页只能显示全局数据 |
+| 8 | 日历分团去重 | `calendar/app/main.py` | ✅ 已修：合并去重键原来只有「日期+时间」，不同分团同点开演会互相覆盖标题（BEJ 的场次曾被 GNZ 覆盖），现在键里带 `group_code` |
 
 另外补了一个写入护栏：wiki 抓取出现失败（或任职区间抓到 0 条）时，三个写入型
 工具会拒绝覆盖，需要 `--allow-partial` 才强行写入——避免一次网络抖动把花名册/
