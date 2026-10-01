@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 );
 CREATE TABLE IF NOT EXISTS downloads (
   bvid TEXT PRIMARY KEY,
+  group_code TEXT,
   title TEXT NOT NULL DEFAULT '',
   codec TEXT,
   path TEXT,
@@ -107,10 +108,17 @@ class HistoryStore:
 
     @staticmethod
     def _migrate(conn: sqlite3.Connection):
-        """老库补列：scope（full=整场 / mc=仅MC合集）。"""
+        """老库补列：scope（整场/仅MC）与 group_code（分团）。"""
         columns = {row[1] for row in conn.execute("PRAGMA table_info(downloads)")}
         if "scope" not in columns:
             conn.execute("ALTER TABLE downloads ADD COLUMN scope TEXT")
+        if "group_code" not in columns:
+            conn.execute("ALTER TABLE downloads ADD COLUMN group_code TEXT")
+        # 阶段 1：历史数据全部属于 SNH48
+        conn.execute(
+            "UPDATE downloads SET group_code = 'snh' "
+            "WHERE group_code IS NULL OR group_code = ''"
+        )
         # 历史记录里标题/路径带「MC合集」的必然是仅MC，其余按整场处理
         conn.execute(
             "UPDATE downloads SET scope = CASE "
@@ -153,7 +161,8 @@ class HistoryStore:
         return row is not None
 
     def mark_downloaded(self, bvid: str, title: str, codec: str = "",
-                        path: str = "", status: str = "ok", scope: str = "full"):
+                        path: str = "", status: str = "ok", scope: str = "full",
+                        group_code: str = "snh"):
         now = datetime.now().isoformat(timespec="seconds")
         file_size = os.path.getsize(path) if path and os.path.exists(path) else None
         codec_source = "probed" if codec else None
@@ -162,10 +171,11 @@ class HistoryStore:
             conn.execute(
                 """
                 INSERT INTO downloads (
-                  bvid, title, codec, path, scope, status, path_source, codec_source,
+                  bvid, group_code, title, codec, path, scope, status, path_source, codec_source,
                   file_size, team, perf_date, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, 'recorded', ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'recorded', ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(bvid) DO UPDATE SET
+                  group_code=excluded.group_code,
                   title=excluded.title,
                   codec=excluded.codec,
                   path=excluded.path,
@@ -179,7 +189,8 @@ class HistoryStore:
                   updated_at=excluded.updated_at
                 """,
                 (
-                    bvid, title, codec or None, path or None, scope, status, codec_source,
+                    bvid, group_code or "snh", title, codec or None, path or None,
+                    scope, status, codec_source,
                     file_size, normalize_team(title, _derive_team(path)),
                     _derive_date(title, path), now, now,
                 ),
@@ -189,7 +200,8 @@ class HistoryStore:
     def get(self, bvid: str) -> dict | None:
         with self._connect() as conn:
             row = conn.execute(
-                "SELECT bvid, title, codec, path, scope, status FROM downloads WHERE bvid=?",
+                "SELECT bvid, group_code, title, codec, path, scope, status "
+                "FROM downloads WHERE bvid=?",
                 (bvid,),
             ).fetchone()
         return dict(row) if row else None

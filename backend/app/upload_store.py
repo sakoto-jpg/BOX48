@@ -16,6 +16,7 @@ from team_utils import clean_team_from_title
 UPLOAD_SCHEMA = """
 CREATE TABLE IF NOT EXISTS uploads (
   bvid TEXT PRIMARY KEY,
+  group_code TEXT,
   aid INTEGER,
   title TEXT NOT NULL DEFAULT '',
   team TEXT,
@@ -75,6 +76,13 @@ class UploadStore:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(uploads)")}
         if "team" not in columns:
             conn.execute("ALTER TABLE uploads ADD COLUMN team TEXT")
+        if "group_code" not in columns:
+            conn.execute("ALTER TABLE uploads ADD COLUMN group_code TEXT")
+        # 阶段 1：投稿目录目前只同步 SNH48 官方账号
+        conn.execute(
+            "UPDATE uploads SET group_code = 'snh' "
+            "WHERE group_code IS NULL OR group_code = ''"
+        )
         rows = conn.execute(
             "SELECT bvid, title FROM uploads WHERE team IS NULL OR team = ''"
         ).fetchall()
@@ -149,10 +157,11 @@ class UploadStore:
             conn.execute(
                 """
                 INSERT INTO uploads (
-                  bvid, aid, title, team, pubdate, pub_date, duration, parts,
+                  bvid, group_code, aid, title, team, pubdate, pub_date, duration, parts,
                   owner_mid, owner_name, cover, pages_json, first_seen, last_seen
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(bvid) DO UPDATE SET
+                  group_code=excluded.group_code,
                   aid=excluded.aid,
                   title=excluded.title,
                   team=excluded.team,
@@ -168,6 +177,7 @@ class UploadStore:
                 """,
                 (
                     detail.get("bvid"),
+                    detail.get("group_code") or "snh",
                     detail.get("aid"),
                     detail.get("title") or "",
                     clean_team_from_title(detail.get("title")),

@@ -11,6 +11,7 @@ import sqlite3
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS performances (
   id TEXT PRIMARY KEY,
+  group_code TEXT,
   date TEXT,
   show_time TEXT,
   title TEXT,
@@ -43,6 +44,14 @@ class ScheduleStore:
             os.makedirs(parent, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(SCHEMA)
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(performances)")}
+            if "group_code" not in columns:
+                conn.execute("ALTER TABLE performances ADD COLUMN group_code TEXT")
+            # 阶段 1：历史排期全部属于 SNH48
+            conn.execute(
+                "UPDATE performances SET group_code = 'snh' "
+                "WHERE group_code IS NULL OR group_code = ''"
+            )
             conn.commit()
 
     def _import_legacy_if_empty(self):
@@ -84,9 +93,10 @@ class ScheduleStore:
             conn.executemany(
                 """
                 INSERT INTO performances
-                  (id, date, show_time, title, link, team, fetch_time, raw_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  (id, group_code, date, show_time, title, link, team, fetch_time, raw_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
+                  group_code=excluded.group_code,
                   date=excluded.date,
                   show_time=excluded.show_time,
                   title=excluded.title,
@@ -98,6 +108,7 @@ class ScheduleStore:
                 [
                     (
                         str(entry.get("id")),
+                        entry.get("group_code") or "snh",
                         entry.get("date", ""),
                         entry.get("show_time", ""),
                         entry.get("title", ""),
