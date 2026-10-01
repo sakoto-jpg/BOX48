@@ -54,6 +54,7 @@ teams:
     name: 预备生
     fandom: SNH48 Trainee
     sources: ["SNH48 Trainees", "SNH48 24th Generation"]
+    stage_sources: ["SNH48 New Members Stages", "SNH48 Trainee Stages"]
   - { group: snh, code: special, name: 特殊公演, fandom: SNH48, sync_roster: false }
   # 以下为阶段 5 启用分团时的占位映射
   - { group: gnz, code: g, name: GNZ48 TEAM G, fandom: Team G }

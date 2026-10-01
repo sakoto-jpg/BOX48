@@ -69,6 +69,16 @@ def stage_names(name_field: str) -> tuple:
     return chinese, others
 
 
+def keyword_variants(title: str, aliases: list) -> list:
+    """关键词：剧目名 + 别名；去掉新生公演常见的 NEW 前缀作为额外关键词。"""
+    keywords = [title] + list(aliases)
+    for name in (title,) + tuple(aliases):
+        stripped = re.sub(r"^NEW\s+", "", name, flags=re.I).strip()
+        if stripped and stripped != name:
+            keywords.append(stripped)
+    return list(dict.fromkeys(k for k in keywords if k))
+
+
 def template_members(template_name: str) -> list:
     data = wiki_api({"action": "parse", "page": f"Template:{template_name}", "prop": "wikitext"})
     text = (data.get("parse") or {}).get("wikitext", "")
@@ -96,10 +106,13 @@ def stage_cast(text: str):
     return premiere, finale
 
 
-def collect_stages(team_cfg, cache, report):
+def collect_stages(team_cfg, sources, cache, report):
     fandom = team_cfg.get("fandom", "")
-    theme = team_cfg.get("name", "").replace("TEAM ", "")
-    pages = [p for p in category_members(f"{fandom} Stages") if "(Cancelled)" not in p]
+    pages = []
+    for source in sources:
+        for page in category_members(source):
+            if "(Cancelled)" not in page and page not in pages:
+                pages.append(page)
     stages = []
     for page in pages:
         data = wiki_api({"action": "parse", "page": page, "prop": "wikitext"})
@@ -118,6 +131,7 @@ def collect_stages(team_cfg, cache, report):
             "page": page,
             "title": title,
             "aliases": others,
+            "keywords": keyword_variants(title, others),
             "theme": field(text, "theme") or team_cfg.get("group", ""),
             "group": team_cfg.get("group", ""),
             "team": team_cfg.get("name", ""),
@@ -150,9 +164,13 @@ def main():
             continue
         if team_cfg.get("sync_roster", True) is False:
             continue
-        if not str(team_cfg.get("fandom", "")).startswith("Team "):
-            continue
-        stages += collect_stages(team_cfg, cache, report)
+        sources = team_cfg.get("stage_sources")
+        if not sources:
+            fandom = str(team_cfg.get("fandom", ""))
+            if not fandom.startswith("Team "):
+                continue
+            sources = [f"{fandom} Stages"]
+        stages += collect_stages(team_cfg, sources, cache, report)
 
     # 批量解析成员页标题 → 中文名
     pages = []
@@ -173,6 +191,7 @@ def main():
             "team": stage["team"],
             "group": stage["group"],
             "keywords": list(dict.fromkeys([stage["title"]] + stage["aliases"])),
+            "keywords": stage["keywords"],
             "premiere": stage["premiere"],
             "finale": stage["finale"],
             "members": members,

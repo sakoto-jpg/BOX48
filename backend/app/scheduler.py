@@ -15,6 +15,7 @@ from downloader import BiliDownloader
 from merger import merge_parts, is_song_part, _get_video_codec as get_video_codec
 from emby_client import EmbyClient
 from history_store import HistoryStore
+from member_store import MemberStore
 
 MC_TITLE_SUFFIX = "MC合集"  # MC模式入库标题/目录后缀；_auto_rewash 靠 path 中该串推断范围，勿改
 
@@ -42,11 +43,14 @@ class Snh48Scanner:
         self.config_path = config_path
         self.cookie_path = cookie_path
         self.base_download_path = base_download_path
-        self.nfo_builder = NfoBuilder(config_path, base_download_path)
-        self.downloader = BiliDownloader(cookie_path)
         # 旧 download_history.txt 仅作只读备份；读写全部走 SQLite
         self.history_file = os.path.join(os.path.dirname(config_path), "download_history.txt")
-        self.history_store = HistoryStore(os.path.join(os.path.dirname(config_path), "snh48.db"))
+        db_path = os.path.join(os.path.dirname(config_path), "snh48.db")
+        self.history_store = HistoryStore(db_path)
+        # 历史阵容（member_terms）供 NFO 在剧目名匹配不到时回溯当期成员
+        self.member_store = MemberStore(db_path)
+        self.nfo_builder = NfoBuilder(config_path, base_download_path, self.member_store)
+        self.downloader = BiliDownloader(cookie_path)
         self.active_tasks = {}
         self._progress_lock = threading.Lock()
         self.emby_client = None
