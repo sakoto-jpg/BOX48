@@ -209,7 +209,8 @@ def main():
             report["failed"] += 1
             continue
 
-        same = old_names == members
+        # Emby 会按自己的人物库回写 NFO（大小写可能被规范化），比较时忽略大小写
+        same = [n.lower() for n in old_names] == [m.lower() for m in members]
         detail = {"bvid": bvid, "team": team, "date": date, "source": source,
                   "old_count": len(old_names), "new_count": len(members),
                   "changed": not same or args.force}
