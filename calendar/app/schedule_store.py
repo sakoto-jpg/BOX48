@@ -75,7 +75,9 @@ class ScheduleStore:
 
     def load(self) -> dict:
         with self._connect() as conn:
-            rows = conn.execute("SELECT raw_json FROM performances").fetchall()
+            rows = conn.execute(
+                "SELECT raw_json, group_code FROM performances"
+            ).fetchall()
         data = {}
         for row in rows:
             try:
@@ -83,6 +85,8 @@ class ScheduleStore:
             except (TypeError, json.JSONDecodeError):
                 continue
             if record.get("id"):
+                # 旧记录的 raw_json 里没有 group_code，这里统一补上
+                record.setdefault("group_code", row[1] or "snh")
                 data[record["id"]] = record
         return data
 
