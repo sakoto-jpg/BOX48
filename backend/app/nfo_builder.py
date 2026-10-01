@@ -166,8 +166,8 @@ class NfoBuilder:
         wiki 的任职区间只精确到年，年中转会无法区分；但每套剧目的首演/收官
         阵容都带准确日期，构成一串更细的时间锚点：
           - 当天在演的剧目已收官 → 首演阵容 ∪ 收官阵容
-          - 当天在演的剧目仍在演（该队最新一套）→ 首演阵容 ∪ 当前花名册，
-            以覆盖中途加入的成员
+          - 当天在演的剧目仍在演（该队最新一套）→ 直接用当前花名册：
+            首演阵容里可能有人只在 MV/宣传物出现，或已经退团，不应并进来
           - 早于该队第一套已收录剧目 → 返回空，交由上层兜底
         """
         date = (date_str or "")[:10]
@@ -182,11 +182,12 @@ class NfoBuilder:
         if active is None:
             return []
         index, stage = active
-        members = list(stage["premiere_members"])
         if stage["finale"]:
-            members += stage["finale_members"]
+            members = list(stage["premiere_members"]) + list(stage["finale_members"])
         elif index == len(stages) - 1:
-            members += self._roster_members(team_name)
+            members = self._roster_members(team_name)
+        else:
+            members = list(stage["premiere_members"])
         return clean_members(members)
     def _members_for(self, title: str, team_name: str, year: str,
                      date_str: str = "") -> tuple:
