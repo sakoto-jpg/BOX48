@@ -15,6 +15,11 @@ import os
 import sqlite3
 import hashlib
 import yaml
+
+try:
+    from . import group_config
+except ImportError:
+    import group_config
 from urllib.parse import urlparse, parse_qs
 
 app = FastAPI()
@@ -129,11 +134,11 @@ def save_local_data(data):
     schedule_store.save(data)
 
 
-def fetch_from_api(month_str):
-    """从官方 API 获取指定月份的票务/公演数据."""
+def fetch_from_api(month_str, group_code: str = "snh", gid: int = 1):
+    """从官方 API 获取指定分团、指定月份的票务/公演数据."""
     try:
         resp = requests.post(
-            f"{API_BASE}/getticketinfo.php?gid=1",
+            f"{API_BASE}/getticketinfo.php?gid={gid}",
             headers=API_HEADERS,
             data={"act": "choose", "date": month_str, "team": "ALL"},
             timeout=15,
@@ -217,6 +222,7 @@ def fetch_from_api(month_str):
             "is_real": is_real,
             "api_date": api_date,
             "fetch_time": datetime.now().strftime("%Y-%m-%d"),
+            "group_code": group_code,
         })
 
     return results, True
@@ -270,14 +276,19 @@ def fetch_snh48_tickets():
         next_month = (now.replace(day=28) + timedelta(days=4)).strftime("%Y-%m")
 
         # 拉取当月和下月数据
-        ok_months = set()
+        ok_keys = set()
         api_keys = set()
-        for month in [current_month, next_month]:
-            api_items, ok = fetch_from_api(month)
-            if ok:
-                ok_months.add(int(month.split("-")[1]))
-            api_keys.update((item["date"], item["show_time"]) for item in api_items)
-            merge_api_items(local_data, api_items)
+        for group in group_config.enabled_groups():
+            group_code = group.get("code", "snh")
+            gid = int(group.get("api_gid", 1))
+            for month in [current_month, next_month]:
+                api_items, ok = fetch_from_api(month, group_code=group_code, gid=gid)
+                if ok:
+                    ok_keys.add((group_code, int(month.split("-")[1])))
+                api_keys.update(
+                    (group_code, item["date"], item["show_time"]) for item in api_items
+                )
+                merge_api_items(local_data, api_items)
 
         # 清理当月/下月已失效的临时记录（例如官方改了场次时间导致旧记录残留）。
         # 注意按「日期+场次时间」判断，而不是按 ID：合并逻辑对同日期同时间的
@@ -289,8 +300,9 @@ def fetch_snh48_tickets():
             if str(entry.get("fetch_time", ""))[:4] != str(now.year):
                 continue
             month_match = re.search(r"(\d+)月", entry.get("date", ""))
-            key = (entry.get("date", ""), entry.get("show_time", ""))
-            if (month_match and int(month_match.group(1)) in ok_months
+            group_code = entry.get("group_code") or "snh"
+            key = (group_code, entry.get("date", ""), entry.get("show_time", ""))
+            if (month_match and (group_code, int(month_match.group(1))) in ok_keys
                     and key not in api_keys):
                 stale_ids.append(tid)
                 local_data.pop(tid, None)
@@ -299,7 +311,7 @@ def fetch_snh48_tickets():
             print(f"🧹 清理失效场次 {len(stale_ids)} 条: {', '.join(stale_ids)}", flush=True)
 
         save_local_data(local_data)
-        return sorted(local_data.values(), key=sort_key, reverse=True), bool(ok_months)
+        return sorted(local_data.values(), key=sort_key, reverse=True), bool(ok_keys)
 
     except Exception as e:
         print(f"Error fetching data: {e}")

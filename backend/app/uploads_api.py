@@ -63,8 +63,13 @@ def _pick_schedule_upload(perf, candidates, year):
 
     先按规范队伍匹配，再用剧目名《》收敛；若队伍判定不一致（例如排期标题
     写 YBS《心的旅程》、投稿标题写“新生公演”），则放宽为同日期按剧目名匹配。
+    匹配范围限定在同一分团内（阶段 1 数据均为 snh）。
     """
-    same_day = [u for u in candidates if u["year"] == year]
+    group = perf.get("group_code") or "snh"
+    same_day = [
+        u for u in candidates
+        if u["year"] == year and (u.get("group_code") or "snh") == group
+    ]
     if not same_day:
         return None
 
@@ -268,14 +273,18 @@ def schedule_status(date: str = ""):
     try:
         if not _has_table(conn, "performances"):
             return {"date": date, "items": []}
-        performances = conn.execute(
-            "SELECT id, date, show_time, title, team, link, fetch_time "
-            "FROM performances WHERE date=?",
-            (date,),
-        ).fetchall()
-        upload_rows = conn.execute(
-            "SELECT bvid, title, team, pub_date, pubdate, parts FROM uploads"
-        ).fetchall()
+        performances = [
+            dict(row) for row in conn.execute(
+                "SELECT id, group_code, date, show_time, title, team, link, fetch_time "
+                "FROM performances WHERE date=?",
+                (date,),
+            ).fetchall()
+        ]
+        upload_rows = [
+            dict(row) for row in conn.execute(
+                "SELECT bvid, group_code, title, team, pub_date, pubdate, parts FROM uploads"
+            ).fetchall()
+        ]
         downloads = {}
         if _has_table(conn, "downloads"):
             downloads = {
@@ -294,6 +303,7 @@ def schedule_status(date: str = ""):
             continue
         candidates.append({
             "bvid": row["bvid"],
+            "group_code": row["group_code"] or "snh",
             "title": row["title"],
             "year": parsed[0],
             "team": row["team"] or clean_team_from_title(row["title"]),
@@ -314,6 +324,7 @@ def schedule_status(date: str = ""):
         downloaded = downloads.get(bvid) if bvid else None
         items.append({
             "performance_id": perf["id"],
+            "group_code": perf["group_code"] or "snh",
             "show_time": perf["show_time"],
             "title": perf["title"],
             "team": team,
