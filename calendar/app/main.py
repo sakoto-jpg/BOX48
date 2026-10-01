@@ -56,7 +56,20 @@ API_HEADERS = {
     "Origin": "https://www.snh48.com",
 }
 
-TEAM_CN = {"s": "S队", "n": "N队", "h": "H队", "x": "X队", "ybs": "YBS", "def": "", "ckg": "CKG", "cii": "CII", "gii": "GII"}
+# 官方接口的 s_tag → 标题里补的中文队名（阶段 5：补齐全部分团）
+TEAM_CN = {
+    # SNH48
+    "s": "S队", "n": "N队", "h": "H队", "x": "X队", "ybs": "YBS", "def": "",
+    # GNZ48
+    "g": "G队", "niii": "NIII队", "z": "Z队", "gnz48预备生": "预备生",
+    # BEJ48
+    "b": "B队", "e": "E队", "j": "J队",
+    # CKG48 / CGT48
+    "c": "C队", "k": "K队", "ckg": "CKG",
+    "cii": "CII队", "gii": "GII队",
+    # 拼盘场次不加标签
+    "union": "",
+}
 
 
 _TRAINEE_TEAM_NAME = os.environ.get("TRAINEE_TEAM_NAME", "预备生")

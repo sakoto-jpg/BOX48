@@ -9,6 +9,7 @@ from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from scheduler import Snh48Scanner
+from team_utils import keyword_hit
 from uploads_api import router as uploads_router
 
 app = FastAPI(title="SNH48 Downloader API")
@@ -143,14 +144,21 @@ def check_reminders():
         if show_id in config.get("manual_subs", []):
             should_notify = True
         else:
+            show_group = show.get("group_code") or "snh"
             for team in config.get("teams", []):
                 # 🚀 排期提醒与"录播自动入库"解耦：只由队伍的通知开关(notify)控制
                 if team.get("notify", False):
+                    # 分团限定：GNZ 场次不会去匹配 SNH 队伍（预备生/特殊公演这类
+                    # 通用关键词在多个分团重复出现）
+                    team_group = (group_config.team_by_name(team.get("name", "")) or {}).get("group")
+                    if team_group and team_group != show_group:
+                        continue
                     # 关键词和队伍名都参与匹配：日历给 def 场次补的「预备生」标签也能命中
+                    # 匹配带词边界，避免 TEAM NII 命中 TEAM NIII、TEAM G 命中 TEAM GII
                     patterns = list(team.get("keywords", [])) + [team.get("name", "")]
                     for kw in patterns:
                         clean_kw = str(kw).replace("《", "").replace("》", "").strip()
-                        if clean_kw and clean_kw in title:
+                        if clean_kw and keyword_hit(clean_kw, title):
                             should_notify = True
                             break
                 if should_notify: break

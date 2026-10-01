@@ -125,6 +125,16 @@ def match_group_team(title: str, group_code: str) -> str:
     return ""
 
 
+def keyword_hit(keyword: str, text: str) -> bool:
+    """单个关键词是否命中文本（ASCII 关键词要求词边界）。
+
+    用于标题/排期匹配：避免 TEAM NII 命中 TEAM NIII、TEAM G 命中 TEAM GII。
+    """
+    keyword = str(keyword or "").strip()
+    if not keyword:
+        return False
+    return bool(_keyword_pattern(keyword).search(text or ""))
+
 def resolve_team(title: str, group_code: str = "snh") -> str:
     """按分团解析标题里的队伍；snh 沿用既有规则，其他分团走配置关键词。"""
     if not group_code or group_code == "snh":
