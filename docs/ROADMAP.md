@@ -3,6 +3,28 @@
 > 阶段 0 基线文档：记录现状、需求、目标架构与实施顺序。后续改动都在
 > `refactor/multi-group` 分支上进行，按阶段推进、每阶段可独立上线。
 
+## 零、当前进度（2026-10-01）
+
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| 0 基线文档 | ✅ 完成 | 本文件 |
+| 1 配置化地基 | ✅ 完成 | `groups.yaml`、三表 `group_code` 回填、日历按分团抓取 |
+| 2 花名册自动同步 | ✅ 完成 | `sync_roster_from_wiki.py`；每周一 04:30（北京时间）自动同步 |
+| 3 剧目名单 + 历史阵容 | ✅ 完成 | `member_terms` 表、`sync_performances_from_wiki.py`、NFO 三层匹配 |
+| 4 展示层 | ⏳ 待开始 | 前端筛选按配置生成、Emby 分团前缀、素材映射 |
+| 5 全分团接入 | ⏳ 待开始 | 目前仅 `snh` 分团 `enabled: true` |
+
+已落地的运维入口：
+
+- `python tools/sync_wiki_all.py --apply`：花名册 → 任职区间 → 剧目名单一次跑完，
+  写入前自动备份 `roster.yaml` / `performances.wiki.yaml`（保留最近 10 份），
+  完成后调用 `POST /api/reload_metadata` 热加载，无需重启容器。
+- 每周一 04:30（北京时间）由 cron 自动执行上述同步。
+
+数据现状：`member_terms` 431 条区间 / 302 名成员；自动剧目名单 56 个剧目
+（覆盖 SNH48 四队 + 训练生公演）。`performances.yaml` 的 12 条人工配置仍然
+优先于自动生成层。
+
 ## 一、现状
 
 三个服务共用一套 SQLite（`config/snh48.db`）：
@@ -60,11 +82,27 @@ teams:
 - 新增 `member_terms`：成员在分团/队伍的任职区间（来自 wiki）。
 - 剧目名单（`performances.yaml` 或新表）：剧目 → 成员名单，标记来源（人工/自动）。
 
+实际实现：
+
+- `member_terms(member, group_code, team_code, start_year, end_year, concurrent,
+  wiki_page, source, updated_at)`，按年记录区间，整表重建，见
+  `backend/app/member_store.py`。
+- 剧目名单拆成两层文件：`performances.yaml`（人工，优先）与
+  `performances.wiki.yaml`（自动生成，勿手改），运行期合并，键为
+  `(剧目名, 队伍)`。
+
 ### 3.3 演员表三层匹配
 
 1. 剧目名单（`performances.yaml`，人工覆盖优先）；
 2. 按公演日期 + 队伍从 `member_terms` 计算当时阵容；
 3. 当前 `roster.yaml` 队伍名单（最终兜底）。
+
+实际实现（`backend/app/nfo_builder.py::_members_for`）：
+
+1. 剧目名单本队命中（同名剧目靠队伍区分）；
+2. `member_terms` 按公演年份回溯当期阵容；
+3. 剧目名单跨队兜底（用于队名判错或特殊公演）；
+4. 当前花名册（含未开启自动入库的队伍，并过滤「SNH48 Group」占位成员）。
 
 ### 3.4 Emby 组织
 
@@ -102,3 +140,16 @@ teams:
   `performances.yaml` 人工修正。
 - Emby 目录/系列改名会触发重新扫描，建议一次性确定命名规则。
 - 改造分支为 `refactor/multi-group`，禁止直接在 `master` 上修改。
+
+## 七、已踩过的坑（实现记录）
+
+- **紧凑写法 Infobox**：部分成员页把整个 Infobox 写在一行，逐行解析会越界
+  读到后续参数（甚至把 `generation` 当成队伍），必须按 `|参数=` 截断。
+- **未标注日期的队伍字段**：如 `[[Team SII]]` 没有年份区间，早期规则要求出现
+  `present` 才视为在册，导致芦馨怡这类成员被误剔除；现在改为「有区间则要求
+  present/至今，无区间视为在册」，并额外排除 `Former ...` 与 `inactive`。
+- **同名剧目**：如「十八个闪耀瞬间」四个队都有，关键词匹配必须带队伍维度，
+  否则会串台。
+- **新生公演**：SNH48 的「NEW 心的旅程」「NEW 命运 X 号」等属于
+  `Category:SNH48 New Members Stages`，与同名正场剧目重名，需要按队伍区分，
+  并额外生成去掉 `NEW ` 前缀的关键词。
