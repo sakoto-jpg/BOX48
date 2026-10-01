@@ -4,10 +4,12 @@
 #         enabled=false 的分团暂不抓取排期，等阶段 5 再逐个打开。
 #         member_sources 是成员任职区间同步（member_terms）的 wiki 分类，
 #         覆盖现役 + 毕业/转会成员，用于按公演日期回溯历史阵容。
+#         theme_color 是前端标签页主题色（十六进制），可按官方应援色调整。
 # teams:  队伍代码 → 规范名/外部页面映射。(group, code) 才是全局唯一键。
 groups:
   - code: snh
     name: SNH48
+    theme_color: "#2b6cff"
     api_gid: 1
     bilibili_mid: 2832224
     enabled: true
@@ -16,6 +18,7 @@ groups:
       mode: def_keywords          # SNH48 训练生用 team=def + 关键词判定
   - code: gnz
     name: GNZ48
+    theme_color: "#12b76a"
     api_gid: 3
     bilibili_mid: null
     enabled: false
@@ -25,18 +28,21 @@ groups:
       team_code: gnz48预备生
   - code: bej
     name: BEJ48
+    theme_color: "#ff3d7f"
     api_gid: 2
     bilibili_mid: null
     enabled: false
     member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
+    theme_color: "#f59e0b"
     api_gid: 5
     bilibili_mid: null
     enabled: false
     member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
+    theme_color: "#8b5cf6"
     api_gid: 6
     bilibili_mid: null
     enabled: false

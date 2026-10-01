@@ -44,19 +44,37 @@ def log(message):
     print(f"[{time.strftime('%H:%M:%S')}] {message}", flush=True)
 
 
-def http_json(url, params=None, timeout=30):
+def http_json(url, params=None, timeout=30, retries=3):
+    """带重试的 JSON 请求；wiki 偶发断连时不再让整轮任务中断。"""
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
-    request = urllib.request.Request(url, headers={"User-Agent": UA})
-    with urllib.request.urlopen(request, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": UA})
+            with urllib.request.urlopen(request, timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001 - 网络层异常统一重试
+            last_error = exc
+            if attempt < retries:
+                time.sleep(attempt * 3)
+    raise last_error
 
 
-def download_file(url, dest, referer="https://snh48.fandom.com/"):
-    request = urllib.request.Request(url, headers={"User-Agent": UA, "Referer": referer})
-    with urllib.request.urlopen(request, timeout=120) as resp, open(dest, "wb") as fh:
-        shutil.copyfileobj(resp, fh)
-    return os.path.getsize(dest)
+def download_file(url, dest, referer="https://snh48.fandom.com/", retries=3):
+    """带重试的图片下载。"""
+    last_error = None
+    for attempt in range(1, retries + 1):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": UA, "Referer": referer})
+            with urllib.request.urlopen(request, timeout=120) as resp, open(dest, "wb") as fh:
+                shutil.copyfileobj(resp, fh)
+            return os.path.getsize(dest)
+        except Exception as exc:  # noqa: BLE001 - 网络层异常统一重试
+            last_error = exc
+            if attempt < retries:
+                time.sleep(attempt * 3)
+    raise last_error
 
 
 def to_jpg(src, dest):
