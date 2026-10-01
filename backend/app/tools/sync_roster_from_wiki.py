@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""从 Fandom wiki 同步队伍花名册（成员名单）。
+"""从 Fandom wiki 同步队伍花名册（当前在册成员）。
 
 数据来源与规则：
 - groups.yaml 中每个队伍的 sources（默认 Category:<fandom>）
@@ -19,140 +19,24 @@
 import argparse
 import json
 import os
-import re
-import time
-import urllib.parse
-import urllib.request
+import sys
 
 import yaml
 
-API = "https://snh48.fandom.com/api.php"
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from wiki_client import (  # noqa: E402
+    category_members,
+    get_member,
+    load_cache,
+    log,
+    save_cache,
+    team_still_active,
+)
 
 GROUPS_PATH = os.environ.get("GROUPS_PATH", "/config/groups.yaml")
 ROSTER_PATH = os.environ.get("ROSTER_PATH", "/config/roster.yaml")
 CACHE_PATH = os.environ.get("WIKI_MEMBER_CACHE", "/config/assets/wiki_members_cache.json")
 REPORT_PATH = os.environ.get("ROSTER_SYNC_REPORT", "/config/assets/roster_sync_report.json")
-CACHE_TTL = 7 * 24 * 3600
-
-
-def log(message):
-    print(message, flush=True)
-
-
-def wiki_api(params, retries=3):
-    params = dict(params, format="json", formatversion=2)
-    url = f"{API}?{urllib.parse.urlencode(params)}"
-    for attempt in range(1, retries + 1):
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": UA})
-            with urllib.request.urlopen(request, timeout=30) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except Exception as exc:
-            if attempt >= retries:
-                raise
-            wait = attempt * 5
-            log(f"  ⚠️ wiki 请求失败（{attempt}/{retries}）: {exc}；{wait}s 后重试")
-            time.sleep(wait)
-
-
-def category_members(category):
-    data = wiki_api({"action": "query", "list": "categorymembers",
-                     "cmtitle": f"Category:{category}", "cmlimit": 500})
-    return [
-        item["title"] for item in data.get("query", {}).get("categorymembers", [])
-        if item.get("title") and not item["title"].startswith("Category:")
-    ]
-
-
-def clean_name(value: str) -> str:
-    """处理「现用名<br>曾用名」这类字段，取第一段并去掉标签。"""
-    value = re.split(r"<br\s*/?>", value or "", flags=re.I)[0]
-    return re.sub(r"<[^>]+>", "", value).strip()
-
-
-def team_still_active(team_field: str, team_name: str) -> bool:
-    """判断 team 字段里是否存在仍属于 team_name 的在册条目。
-
-    条目形态：
-      [[Team SII]]                    → 未标注日期，视为在册
-      [[Team SII]] (2020-present)     → 在册
-      [[Team SII]] (2019–至今)        → 在册
-      [[Team X]] (Concurrent: 2025-2026) → 已结束
-    只用去掉队友标记（如 Concurrent）的区间判断，避免把兼任历史当成在册。
-    """
-    for entry in re.split(r"<br\s*/?>|\n", team_field or ""):
-        if re.search(r"\[\[" + re.escape(team_name) + r"(\]\]|\|)", entry):
-            pass
-        elif "[[" not in entry and team_name in entry:
-            pass
-        else:
-            continue
-        ranges = re.findall(r"\(([^)]*)\)", entry)
-        if not ranges:
-            return True
-        if any("present" in item.lower() or "至今" in item for item in ranges):
-            return True
-    return False
-
-
-def parse_member_page(text):
-    def field(name):
-        match = re.search(r"\|\s*" + name + r"\s*=\s*(.+)", text or "")
-        return match.group(1).strip() if match else ""
-
-    def team_raw():
-        """team 字段可能跨行列出多个队伍，需要读到下一个参数为止。"""
-        match = re.search(r"^\s*\|\s*team\s*=\s*(.*?)(?=^\s*\|\s*\w+\s*=|\}\})",
-                          text or "", re.M | re.S)
-        return match.group(1).strip() if match else field("team")
-
-    name_raw = field("name")
-    chinese = field("simplified_chinese")
-    if not chinese:
-        match = re.search(r"<br\s*/?>\s*([\u4e00-\u9fff·]+)", name_raw)
-        chinese = match.group(1) if match else ""
-    chinese = clean_name(chinese)
-    return {
-        "chinese": chinese,
-        "theme": field("theme"),
-        "team": team_raw(),
-        "generation": field("generation"),
-        "active": field("active"),
-        "image": field("image"),
-    }
-
-
-def load_cache():
-    try:
-        with open(CACHE_PATH, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_cache(cache):
-    parent = os.path.dirname(CACHE_PATH)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(CACHE_PATH, "w", encoding="utf-8") as fh:
-        json.dump(cache, fh, ensure_ascii=False, indent=2)
-
-
-def get_member(page, cache, refresh):
-    entry = cache.get(page)
-    if entry and not refresh and time.time() - entry.get("ts", 0) < CACHE_TTL:
-        data = entry.get("data") or {}
-        # 兼容旧缓存里未清洗的姓名
-        if data.get("chinese"):
-            data["chinese"] = clean_name(data["chinese"])
-        return data
-    data = wiki_api({"action": "parse", "page": page, "prop": "wikitext"})
-    info = parse_member_page(data.get("parse", {}).get("wikitext", ""))
-    cache[page] = {"ts": time.time(), "data": info}
-    time.sleep(0.5)
-    return info
 
 
 def collect_team_members(team_cfg, cache, refresh):
@@ -186,6 +70,10 @@ def collect_team_members(team_cfg, cache, refresh):
         if not info or not info.get("chinese"):
             continue
         if group_name and info.get("theme") != group_name:
+            continue
+        # 已毕业/退团的成员 active 字段是闭合区间，不含 present
+        active = (info.get("active") or "").lower()
+        if active and "present" not in active and "至今" not in active:
             continue
         # 要求 team 字段里存在指向目标队伍且仍在册的条目（常规队伍用队名，
         # 训练生用 SNH48 Trainee 这类标记），避免已转队或已毕业的成员混入
@@ -223,7 +111,7 @@ def main():
         if group.get("enabled", False)
     }
     roster_teams = {team.get("name"): team for team in roster.get("teams", [])}
-    cache = load_cache()
+    cache = load_cache(CACHE_PATH)
     report = {"teams": [], "unmapped": []}
 
     for team_cfg in groups_cfg.get("teams", []):
@@ -266,7 +154,7 @@ def main():
         os.makedirs(parent, exist_ok=True)
     with open(REPORT_PATH, "w", encoding="utf-8") as fh:
         json.dump(report, fh, ensure_ascii=False, indent=2)
-    save_cache(cache)
+    save_cache(cache, CACHE_PATH)
     log(f"报告已写入: {REPORT_PATH}")
 
     if not args.apply:

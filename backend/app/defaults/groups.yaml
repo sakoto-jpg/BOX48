@@ -2,6 +2,8 @@
 #
 # groups: 分团定义。api_gid 对应官方票务接口 getticketinfo.php?gid=N；
 #         enabled=false 的分团暂不抓取排期，等阶段 5 再逐个打开。
+#         member_sources 是成员任职区间同步（member_terms）的 wiki 分类，
+#         覆盖现役 + 毕业/转会成员，用于按公演日期回溯历史阵容。
 # teams:  队伍代码 → 规范名/外部页面映射。(group, code) 才是全局唯一键。
 groups:
   - code: snh
@@ -9,6 +11,7 @@ groups:
     api_gid: 1
     bilibili_mid: 2832224
     enabled: true
+    member_sources: ["SNH48 Members", "SNH48 Graduates", "SNH48 Trainees"]
     trainee:
       mode: def_keywords          # SNH48 训练生用 team=def + 关键词判定
   - code: gnz
@@ -16,6 +19,7 @@ groups:
     api_gid: 3
     bilibili_mid: null
     enabled: false
+    member_sources: ["GNZ48 Members", "GNZ48 Graduates", "GNZ48 Trainees"]
     trainee:
       mode: team_code             # GNZ 接口直接返回 gnz48预备生
       team_code: gnz48预备生
@@ -24,16 +28,19 @@ groups:
     api_gid: 2
     bilibili_mid: null
     enabled: false
+    member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
     api_gid: 5
     bilibili_mid: null
     enabled: false
+    member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
     api_gid: 6
     bilibili_mid: null
     enabled: false
+    member_sources: ["CGT48 Members", "CGT48 Graduates", "CGT48 Trainees"]
 
 # sources: 花名册同步用的 wiki 分类；不填则默认用 Category:<fandom>
 # sync_roster: false 表示该队伍不参与花名册自动同步（如特殊公演）
@@ -64,3 +71,11 @@ teams:
   - { group: ckg, code: k, name: CKG48 TEAM K, fandom: Team K }
   - { group: cgt, code: cii, name: CGT48 TEAM CII, fandom: Team CII }
   - { group: cgt, code: gii, name: CGT48 TEAM GII, fandom: Team GII }
+
+# 历史/特殊队伍名 → 现有队伍：仅用于成员任职区间（member_terms）映射，
+# 不影响花名册与排期匹配
+legacy_teams:
+  - { fandom: "Team XII", group: snh, code: xii }
+  - { fandom: "Team HIII", group: snh, code: hiii }
+  - { fandom: "Team FT", group: snh, code: ft }
+  - { fandom: "SNH48 Overseas Trainee", group: snh, code: ybs }
