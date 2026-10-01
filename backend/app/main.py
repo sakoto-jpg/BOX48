@@ -288,10 +288,20 @@ def get_config():
 def save_config(config: dict):
     with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
         yaml.dump(config, f, allow_unicode=True, sort_keys=False)
-    scanner.nfo_builder.roster = scanner.nfo_builder._load_roster(CONFIG_PATH)
+    scanner.nfo_builder.reload_config()
     scanner.reload_emby_client()
     reschedule_scan_job()
     return {"message": "配置已保存并生效"}
+
+@app.post("/api/reload_metadata")
+def reload_metadata():
+    """重新加载 roster.yaml 与剧目名单（wiki 定时同步后调用，无需重启容器）。"""
+    scanner.nfo_builder.reload_config()
+    return {
+        "message": "花名册与剧目名单已重新加载",
+        "teams": len(scanner.nfo_builder.roster),
+        "performances": len(scanner.nfo_builder.performances),
+    }
 
 @app.get("/api/history")
 def get_history():

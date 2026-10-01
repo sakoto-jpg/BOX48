@@ -54,6 +54,11 @@ class NfoBuilder:
                 }
         return roster_dict
 
+    def reload_config(self) -> None:
+        """重新读取 roster.yaml 与两个剧目名单（wiki 同步后调用）。"""
+        self.roster = self._load_roster(self.config_path)
+        self.performances = self._load_performances(self.config_path)
+
     def _load_performances(self, config_path: str) -> list:
         """手工名单（performances.yaml）优先，其次是 wiki 自动生成层。
 
