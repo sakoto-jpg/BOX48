@@ -103,7 +103,8 @@
                 </button>
             </div>
         </div>
-        <div data-panel="group-snh" v-show="activeTab === 'group-snh'">
+        <!-- 分团面板：所有已启用分团共用，数据按 activeGroupCode 取 -->
+        <div data-panel="group" v-show="activeGroup && activeGroup.enabled">
             <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
                 <div class="xl:col-span-4 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">

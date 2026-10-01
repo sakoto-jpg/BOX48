@@ -23,7 +23,7 @@ groups:
     theme_color: "#72c13a"        # 青苹果绿
     api_gid: 3
     bilibili_mid: 27363163        # GNZ48官方账号
-    enabled: false
+    enabled: true                 # 阶段 5：2026-10-01 开启（队伍自动入库开关仍在 roster.yaml 单独控制）
     member_sources: ["GNZ48 Members", "GNZ48 Graduates", "GNZ48 Trainees"]
     trainee:
       mode: team_code             # GNZ 接口直接返回 gnz48预备生

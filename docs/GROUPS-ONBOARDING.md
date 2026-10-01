@@ -75,8 +75,10 @@ bej/e 53、bej/j 15、ckg/c 33、ckg/k 31、cgt/cii 22、cgt/gii 15。
    成员、`enabled`、`notify`），执行一次 `sync_wiki_all.py --apply`。
 3. **任职区间 + 剧目名单**：同上一条命令会一并同步；检查
    `member_terms_report.json` 与 `performances_report.json` 是否有异常。
-4. **排期**：`enabled: true` 后日历服务会自动开始抓该 `gid` 的排期，
-   确认 `/api/tickets` 与 ICS 里出现新分团。
+4. **排期**：`enabled: true` 后日历服务会自动开始抓该 `gid` 的排期。
+   注意日历服务有 24 小时内存缓存（`CACHE_TTL`），**新增分团后要重启一次
+   `snh48-calendar` 容器**才会立刻抓取；否则要等缓存过期。
+   重启后确认 `/api/tickets` 与 ICS 里出现新分团（GNZ48 实测 12 条）。
 5. **投稿目录**：投稿同步需要按分团循环（见下面的代码缺口 2），第一次
    全量抓取会很久，之后每天增量 10 条。
 6. **下载入库**：确认标题 → 队伍的匹配（该分团的 `keywords`）、目录结构、
