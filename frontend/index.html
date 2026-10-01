@@ -297,7 +297,7 @@
 
                     <div class="space-y-6">
                         <transition-group name="list">
-                            <div v-for="(team, tIndex) in config.teams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
+                            <div v-for="(team, tIndex) in activeGroupTeams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1" :class="team.enabled ? 'bg-pink-400' : 'bg-slate-300'"></div>
                                 <div class="flex justify-between items-start mb-4 pl-2">
                                     <div class="flex items-center gap-3 w-full pr-2">
@@ -318,7 +318,7 @@
                                         </button>
                                     </div>
 
-                                    <button @click="removeTeam(tIndex)" class="text-slate-400 hover:text-red-500 transition shrink-0 ml-2 mt-1.5">
+                                    <button @click="removeTeam(team)" class="text-slate-400 hover:text-red-500 transition shrink-0 ml-2 mt-1.5">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
                                 </div>
@@ -558,6 +558,16 @@
 
                 const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['queue', 'settings']);
 
+                // 当前分团代码（标签页决定），用于把各卡片的数据限定在本分团
+                const activeGroupCode = computed(() =>
+                    (activeTab.value || '').startsWith('group-') ? activeTab.value.slice(6) : '');
+                const activeGroup = computed(() =>
+                    groups.value.find(g => g.code === activeGroupCode.value) || null);
+                const withGroup = (params) => {
+                    if (activeGroupCode.value) params.set('group_code', activeGroupCode.value);
+                    return params;
+                };
+
                 const selectTab = (key) => {
                     activeTab.value = key;
                     if (location.hash !== '#/' + key) {
@@ -586,7 +596,7 @@
                 const uploadOnlyDownloaded = ref(false);
                 const uploadCategory = ref("");
                 const uploadCategories = ref({});
-                const uploadCategoryOptions = [
+                const SNH_CATEGORY_OPTIONS = [
                     { key: "", label: "全部" },
                     { key: "nii", label: "TEAM NII" },
                     { key: "x", label: "TEAM X" },
@@ -595,6 +605,18 @@
                     { key: "trainee", label: "预备生/新生" },
                     { key: "special", label: "特殊公演" },
                 ];
+                // 分团切换时快捷筛选跟着换：snh 用固定项，其他分团按队伍配置生成
+                const uploadCategoryOptions = computed(() => {
+                    const code = activeGroupCode.value;
+                    if (!code || code === 'snh') return SNH_CATEGORY_OPTIONS;
+                    const options = [{ key: "", label: "全部" }];
+                    (activeGroup.value?.teams || []).forEach(team => {
+                        if (team.code === 'special') return;
+                        options.push({ key: team.code, label: team.name });
+                    });
+                    options.push({ key: "special", label: "其他" });
+                    return options;
+                });
                 const uploadScopeOptions = [
                     { key: "", label: "全部范围" },
                     { key: "full", label: "全场" },
@@ -755,7 +777,7 @@
 
                 const fetchUploadStats = async () => {
                     try {
-                        const res = await fetch(`${API_BASE}/uploads/stats`);
+                        const res = await fetch(`${API_BASE}/uploads/stats?${withGroup(new URLSearchParams()).toString()}`);
                         uploadStats.value = await res.json();
                     } catch (e) {}
                     fetchUploadCategories();
@@ -764,7 +786,7 @@
                 const fetchUploads = async (append = false) => {
                     uploadLoading.value = true;
                     try {
-                        const params = new URLSearchParams({
+                        const params = withGroup(new URLSearchParams({
                             keyword: uploadKeyword.value || "",
                             limit: 50,
                             offset: append ? uploads.value.length : 0,
@@ -773,7 +795,7 @@
                             category: uploadCategory.value || "",
                             downloaded_scope: uploadDownloadedScope.value || "",
                             downloaded_codec: uploadDownloadedCodec.value || ""
-                        });
+                        }));
                         const res = await fetch(`${API_BASE}/uploads?${params.toString()}`);
                         const data = await res.json();
                         uploadTotal.value = data.total || 0;
@@ -815,7 +837,7 @@
 
                 const fetchUploadCategories = async () => {
                     try {
-                        const res = await fetch(`${API_BASE}/uploads/categories`);
+                        const res = await fetch(`${API_BASE}/uploads/categories?${withGroup(new URLSearchParams()).toString()}`);
                         uploadCategories.value = await res.json();
                     } catch (e) {}
                 };
@@ -860,7 +882,12 @@
                         const data = await res.json();
                         if (data.status === "success" && data.data) {
                             const map = {};
-                            const items = Array.isArray(data.data) ? data.data : Object.values(data.data);
+                            let items = Array.isArray(data.data) ? data.data : Object.values(data.data);
+                            // 排期接口按分团返回，这里只保留当前分团
+                            if (activeGroupCode.value) {
+                                items = items.filter(item =>
+                                    !item.group_code || item.group_code === activeGroupCode.value);
+                            }
                             items.forEach(item => {
                                 let cleanDate = item.date;
                                 cleanDate = cleanDate.replace(/^0+/, '');
@@ -879,7 +906,7 @@
                 // 日历卡片：某天每场公演的录播/入库状态与立即入库
                 const fetchScheduleStatus = async () => {
                     try {
-                        const params = new URLSearchParams({ date: selectedDate.value });
+                        const params = withGroup(new URLSearchParams({ date: selectedDate.value }));
                         const res = await fetch(`${API_BASE}/schedule_status?${params.toString()}`);
                         const data = await res.json();
                         const map = {};
@@ -1002,8 +1029,18 @@
 
                 const addSub = () => config.value.subscriptions.push({ name: '', url: 'https://space.bilibili.com/...' });
                 const removeSub = (idx) => { if(confirm('移除该订阅源？')) config.value.subscriptions.splice(idx, 1); };
+                // 花名册卡片只显示当前分团的队伍；roster 条目本身没有分组字段，
+                // 用 /api/groups 里该分团的队伍名来配对
+                const activeGroupTeams = computed(() => {
+                    const all = config.value.teams || [];
+                    const names = new Set((activeGroup.value?.teams || []).map(t => t.name));
+                    return names.size ? all.filter(t => names.has(t.name)) : all;
+                });
                 const addTeam = () => config.value.teams.push({ name: '新队伍', enabled: true, notify: false, keywords: [], members: [], oshis: [] });
-                const removeTeam = (idx) => { if(confirm('删除队伍？')) config.value.teams.splice(idx, 1); };
+                const removeTeam = (team) => {
+                    const idx = config.value.teams.indexOf(team);
+                    if (idx > -1 && confirm('删除队伍？')) config.value.teams.splice(idx, 1);
+                };
 
                 const addKeyword = (team, event) => {
                     const val = event.target.value.trim();
@@ -1055,6 +1092,17 @@
                     uploadPoll = setInterval(fetchUploadStats, 15000);
                 });
 
+                // 切换分团标签时，把该分团的数据重新取一遍
+                watch(activeTab, (key) => {
+                    if (!key || !key.startsWith('group-')) return;
+                    uploadCategory.value = '';
+                    uploadSelected.value = [];
+                    searchUploads();
+                    fetchUploadStats();
+                    fetchSchedules();
+                    fetchScheduleStatus();
+                });
+
                 onUnmounted(() => {
                     if(pollInterval) clearInterval(pollInterval);
                     if(embyPoll) clearInterval(embyPoll);
@@ -1083,7 +1131,8 @@
                     uploadAction, uploadScopeLabel,
                     uploadRepair, runRepairAction,
                     searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,
-                    groups, activeTab, isSavingConfig, selectTab, loadGroups
+                    groups, activeTab, isSavingConfig, selectTab, loadGroups,
+                    activeGroupCode, activeGroup, activeGroupTeams
                 };
             }
         });

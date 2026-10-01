@@ -98,7 +98,7 @@
 | 步骤 | 内容 | 回退方式 |
 |---|---|---|
 | 4a | 引入标签骨架：现有卡片整体放进「SNH48」标签，「下载队列」「设置」单独成页；新增 `/api/groups` | 保留旧 `index.html.pre-tabs.bak`，直接覆盖回去 |
-| 4b | 数据隔离：接口加 `group_code`，卡片按分团过滤，未启用分团显示占位 | 前端不传 `group_code` 即回到全局视图 |
+| 4b | ✅ 数据隔离：接口加 `group_code`，卡片按分团过滤，未启用分团显示占位 | 前端不传 `group_code` 即回到全局视图 |
 | 4c | 主题色、hash 路由、快捷键（`1`–`7` 切换）、移动端适配 | 纯样式，无数据影响 |
 | 4d | 维护工具按钮接入 `/api/maintenance/*` | 仍可 SSH 手工执行 |
 
@@ -114,6 +114,22 @@
   无法解析，改为显式 `app.component('transition-group', Vue.TransitionGroup)`，
   列表动画现在真正生效。
 - 本步只做结构搬运，卡片的数据仍是全局的；按分团隔离在 4b。
+
+### 4b 完成情况（2026-10-01）
+
+- `/api/uploads`、`/api/uploads/categories`、`/api/uploads/stats`、`/api/history`、
+  `/api/schedule_status` 都接受 `group_code`；不传时行为与以前完全一致。
+- 快捷分类条件按分团生成：snh 沿用人工调好的规则，其他分团用
+  `groups.yaml` 各队 keywords 生成，并排除更长的同类关键词
+  （`TEAM NII` 不会吞掉 `TEAM NIII`）；分类键直接用队伍 code。
+- `/api/uploads/stats` 的同步状态按分团取 `snh:full_sync_completed` 这类键，
+  不再跨分团借用时间戳（gnz 未同步时显示「未完成」）。
+- 前端：`activeGroupCode` 由标签页推导，所有取数带上 `group_code`；
+  切换分团标签会重置筛选并重新取数；公演日历按 `group_code` 过滤；
+  花名册只显示本分团队伍；快捷筛选按钮按 `activeGroup.teams` 动态生成
+  （SNH 仍是固定七项）。
+- 实测：新开标签页加载 `#/group-snh` 无控制台报错，投稿统计/分类/花名册
+  数据正常，并且都带上了 `group_code=snh`。
 
 ## 六、风险与注意
 

@@ -224,7 +224,7 @@ class HistoryStore:
         """已入库列表（新→旧），供 /api/history 使用。"""
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT bvid, title, codec, path, scope, team, perf_date "
+                "SELECT bvid, title, codec, path, scope, team, perf_date, group_code "
                 "FROM downloads WHERE status = 'ok' ORDER BY rowid DESC"
             ).fetchall()
         return [dict(row) for row in rows]

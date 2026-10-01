@@ -11,7 +11,9 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query
 
-from team_utils import CANON_GROUP, CODE_TO_CANON, clean_team_from_title
+import group_config
+
+from team_utils import CANON_GROUP, CODE_TO_CANON, clean_team_from_title, resolve_team
 from upload_store import UploadStore
 
 router = APIRouter()
@@ -28,6 +30,45 @@ CATEGORY_CONDITIONS = {
     "sii": "(u.title LIKE '%TEAM S%' OR u.title LIKE '%S队%')",
     "trainee": "(u.title LIKE '%预备生%' OR u.title LIKE '%新生%')",
 }
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("'", "''").replace("%", "\\%").replace("_", "\\_")
+
+
+def category_conditions(group_code: str) -> dict:
+    """快捷分类的 SQL 条件。
+
+    snh 沿用人工调好的规则；其他分团按 groups.yaml 里该分团各队伍的
+    keywords 生成，并排除更长的同类关键词（TEAM NII 不吞 TEAM NIII）。
+    """
+    if not group_code or group_code == "snh":
+        return CATEGORY_CONDITIONS
+    teams = [
+        team for team in group_config.teams()
+        if team.get("group") == group_code and team.get("sync_roster", True) is not False
+    ]
+    all_keywords = [
+        str(kw) for team in teams for kw in (team.get("keywords") or []) if str(kw).strip()
+    ]
+    conditions = {}
+    for team in teams:
+        keywords = [str(kw).strip() for kw in (team.get("keywords") or []) if str(kw).strip()]
+        if not keywords:
+            continue
+        clauses = []
+        for keyword in keywords:
+            escaped = _escape_like(keyword)
+            clause = f"u.title LIKE '%{escaped}%'"
+            longer = [other for other in all_keywords
+                      if other != keyword and other.startswith(keyword)]
+            if longer:
+                excludes = " AND ".join(
+                    f"u.title NOT LIKE '%{_escape_like(other)}%'" for other in longer)
+                clause = f"({clause} AND {excludes})"
+            clauses.append(clause)
+        conditions[team.get("code")] = "(" + " OR ".join(clauses) + ")"
+    return conditions
 
 def _upload_year_month_day(title: str, pub_date: str):
     """从投稿标题/发布日期解析 (年, 月, 日)。
@@ -124,10 +165,15 @@ def list_uploads(
     category: str = "",
     downloaded_scope: str = "",
     downloaded_codec: str = "",
+    group_code: str = "",
 ):
     keyword = keyword.strip()
     where = []
     params = []
+    if group_code:
+        where.append("u.group_code = ?")
+        params.append(group_code)
+    conditions = category_conditions(group_code)
     bv_match = BV_RE.search(keyword)
     if bv_match:
         # 直接按 BV 号精确定位（支持粘贴整条链接）
@@ -138,10 +184,10 @@ def list_uploads(
         where.append("(u.title LIKE ? ESCAPE '\\' OR u.bvid LIKE ? ESCAPE '\\')")
         params.extend([f"%{escaped}%", f"%{escaped}%"])
 
-    if category in CATEGORY_CONDITIONS:
-        where.append(CATEGORY_CONDITIONS[category])
+    if category in conditions:
+        where.append(conditions[category])
     elif category == "special":
-        others = " OR ".join(CATEGORY_CONDITIONS.values())
+        others = " OR ".join(conditions.values())
         where.append(f"NOT ({others})")
 
     conn = _connect()
@@ -195,38 +241,53 @@ def list_uploads(
 
 
 @router.get("/uploads/categories")
-def upload_categories():
+def upload_categories(group_code: str = ""):
     """各快捷分类的投稿数量（special 为未命中其他分类的公演）。"""
+    conditions = category_conditions(group_code)
+    scope = " WHERE u.group_code = ?" if group_code else ""
+    scope_params = [group_code] if group_code else []
+    and_scope = " AND u.group_code = ?" if group_code else ""
     conn = _connect()
     try:
-        others = " OR ".join(CATEGORY_CONDITIONS.values())
-        categories = {
-            key: conn.execute(
-                f"SELECT COUNT(*) FROM uploads u WHERE {condition}"
+        categories = {}
+        for key, condition in conditions.items():
+            categories[key] = conn.execute(
+                f"SELECT COUNT(*) FROM uploads u WHERE ({condition}){and_scope}",
+                scope_params,
             ).fetchone()[0]
-            for key, condition in CATEGORY_CONDITIONS.items()
-        }
-        categories["special"] = conn.execute(
-            f"SELECT COUNT(*) FROM uploads u WHERE NOT ({others})"
+        if conditions:
+            others = " OR ".join(conditions.values())
+            categories["special"] = conn.execute(
+                f"SELECT COUNT(*) FROM uploads u WHERE NOT ({others}){and_scope}",
+                scope_params,
+            ).fetchone()[0]
+        total = conn.execute(
+            f"SELECT COUNT(*) FROM uploads u{scope}", scope_params
         ).fetchone()[0]
-        total = conn.execute("SELECT COUNT(*) FROM uploads").fetchone()[0]
     finally:
         conn.close()
     return {"total": total, "categories": categories}
 
 
 @router.get("/uploads/stats")
-def upload_stats():
+def upload_stats(group_code: str = ""):
+    scope = " WHERE group_code = ?" if group_code else ""
+    scope_params = [group_code] if group_code else []
     conn = _connect()
     try:
-        uploads = conn.execute("SELECT COUNT(*) FROM uploads").fetchone()[0]
-        latest = conn.execute("SELECT MAX(pub_date) FROM uploads").fetchone()[0]
+        uploads = conn.execute(
+            f"SELECT COUNT(*) FROM uploads{scope}", scope_params).fetchone()[0]
+        latest = conn.execute(
+            f"SELECT MAX(pub_date) FROM uploads{scope}", scope_params).fetchone()[0]
         queue = {}
         if _has_table(conn, "upload_queue"):
             queue = {
                 row[0]: row[1]
                 for row in conn.execute(
-                    "SELECT status, COUNT(*) FROM upload_queue GROUP BY status"
+                    "SELECT status, COUNT(*) FROM upload_queue"
+                    + (" WHERE group_code = ?" if group_code else "")
+                    + " GROUP BY status",
+                    scope_params,
                 ).fetchall()
             }
         state = {}
@@ -237,12 +298,15 @@ def upload_stats():
             }
         downloaded = 0
         if _has_table(conn, "downloads"):
+            filters = ["status='ok'"] + (["group_code = ?"] if group_code else [])
             downloaded = conn.execute(
-                "SELECT COUNT(*) FROM downloads WHERE status='ok'"
+                f"SELECT COUNT(*) FROM downloads WHERE {' AND '.join(filters)}",
+                scope_params,
             ).fetchone()[0]
     finally:
         conn.close()
 
+    key_prefix = f"{group_code}:" if group_code else ""
     return {
         "uploads": uploads,
         "downloaded": downloaded,
@@ -252,13 +316,15 @@ def upload_stats():
             "done": queue.get("done", 0),
             "failed": queue.get("failed", 0),
         },
-        "full_sync_completed": state.get("full_sync_completed"),
-        "last_incremental_at": state.get("last_incremental_at"),
+        # 分团维度不留回退：gnz 没有自己的同步记录时应当显示「未完成」，
+        # 而不是借用 snh 的时间戳（snh 的历史键已在迁移时补成 snh: 前缀）
+        "full_sync_completed": state.get(f"{key_prefix}full_sync_completed"),
+        "last_incremental_at": state.get(f"{key_prefix}last_incremental_at"),
     }
 
 
 @router.get("/schedule_status")
-def schedule_status(date: str = ""):
+def schedule_status(date: str = "", group_code: str = ""):
     """某天排期列表的录播/入库状态（供前端日历卡片查缺补漏）。
 
     匹配键：年 + 月 + 日 + 规范队伍名（uploads.team / performances 标题清洗），
@@ -276,13 +342,16 @@ def schedule_status(date: str = ""):
         performances = [
             dict(row) for row in conn.execute(
                 "SELECT id, group_code, date, show_time, title, team, link, fetch_time "
-                "FROM performances WHERE date=?",
-                (date,),
+                "FROM performances WHERE date=?"
+                + (" AND group_code = ?" if group_code else ""),
+                (date, group_code) if group_code else (date,),
             ).fetchall()
         ]
         upload_rows = [
             dict(row) for row in conn.execute(
                 "SELECT bvid, group_code, title, team, pub_date, pubdate, parts FROM uploads"
+                + (" WHERE group_code = ?" if group_code else ""),
+                (group_code,) if group_code else (),
             ).fetchall()
         ]
         downloads = {}
@@ -306,7 +375,7 @@ def schedule_status(date: str = ""):
             "group_code": row["group_code"] or "snh",
             "title": row["title"],
             "year": parsed[0],
-            "team": row["team"] or clean_team_from_title(row["title"]),
+            "team": row["team"] or resolve_team(row["title"], row["group_code"] or "snh"),
             "pubdate": row["pubdate"] or 0,
             "parts": row["parts"] or 0,
         })
@@ -314,7 +383,8 @@ def schedule_status(date: str = ""):
     items = []
     for perf in performances:
         year = _performance_year(perf["fetch_time"], month)
-        team = clean_team_from_title(perf["title"])
+        perf_group = perf["group_code"] or "snh"
+        team = resolve_team(perf["title"], perf_group)
         code = (perf["team"] or "").lower()
         if team == CANON_GROUP and code in ("n", "h", "s", "x"):
             team = CODE_TO_CANON[code]

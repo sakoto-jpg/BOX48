@@ -327,10 +327,12 @@ def reload_metadata():
     }
 
 @app.get("/api/history")
-def get_history():
+def get_history(group_code: str = ""):
     completed = []
     # 数据来自 SQLite（status='ok'），新→旧；返回结构保持与旧 txt 版本一致
     for row in scanner.history_store.list_completed():
+        if group_code and (row.get("group_code") or "snh") != group_code:
+            continue
         entry = {
             "id": row["bvid"],
             "title": row["title"] or "历史导入数据",
