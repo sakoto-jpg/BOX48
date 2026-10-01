@@ -4,12 +4,14 @@
 #         enabled=false 的分团暂不抓取排期，等阶段 5 再逐个打开。
 #         member_sources 是成员任职区间同步（member_terms）的 wiki 分类，
 #         覆盖现役 + 毕业/转会成员，用于按公演日期回溯历史阵容。
-#         theme_color 是前端标签页主题色（十六进制），可按官方应援色调整。
+#         theme_color 是前端标签页主题色（十六进制）。官方未给色号，这里取
+#         近似值：SNH 浅水蓝 / BEJ 洋红·茜粉 / GNZ 青苹果绿 /
+#         CKG 琥珀黄·落日橙黄 / CGT 烈焰红。
 # teams:  队伍代码 → 规范名/外部页面映射。(group, code) 才是全局唯一键。
 groups:
   - code: snh
     name: SNH48
-    theme_color: "#2b6cff"
+    theme_color: "#4cb8e8"        # 浅水蓝
     api_gid: 1
     bilibili_mid: 2832224
     enabled: true
@@ -18,7 +20,7 @@ groups:
       mode: def_keywords          # SNH48 训练生用 team=def + 关键词判定
   - code: gnz
     name: GNZ48
-    theme_color: "#12b76a"
+    theme_color: "#72c13a"        # 青苹果绿
     api_gid: 3
     bilibili_mid: null
     enabled: false
@@ -28,21 +30,21 @@ groups:
       team_code: gnz48预备生
   - code: bej
     name: BEJ48
-    theme_color: "#ff3d7f"
+    theme_color: "#e4007f"        # 洋红 / 茜粉
     api_gid: 2
     bilibili_mid: null
     enabled: false
     member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
-    theme_color: "#f59e0b"
+    theme_color: "#f5a623"        # 琥珀黄 / 落日橙黄
     api_gid: 5
     bilibili_mid: null
     enabled: false
     member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
-    theme_color: "#8b5cf6"
+    theme_color: "#e23636"        # 烈焰红
     api_gid: 6
     bilibili_mid: null
     enabled: false
@@ -61,7 +63,14 @@ teams:
     fandom: SNH48 Trainee
     sources: ["SNH48 Trainees", "SNH48 24th Generation"]
     stage_sources: ["SNH48 New Members Stages", "SNH48 Trainee Stages"]
-  - { group: snh, code: special, name: 特殊公演, fandom: SNH48, sync_roster: false }
+  # cast_mode: roster —— 拼盘/特别公演没有可收录的名单，直接使用 roster.yaml
+  # 中该队伍的成员（特殊公演配的是「SNH48 Group」占位），不做剧目匹配。
+  - group: snh
+    code: special
+    name: 特殊公演
+    fandom: SNH48
+    sync_roster: false
+    cast_mode: roster
   # 以下为阶段 5 启用分团时的占位映射
   - { group: gnz, code: g, name: GNZ48 TEAM G, fandom: Team G }
   - { group: gnz, code: niii, name: GNZ48 TEAM NIII, fandom: Team NIII }

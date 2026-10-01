@@ -17,15 +17,12 @@ def canon_team(name: str) -> str:
     return CODE_TO_CANON.get(str(name).lower(), name)
 
 
-PLACEHOLDER_MEMBER_RE = re.compile(r"^(snh48(\s*group)?|ybs)$", re.I)
-
-
 def clean_members(members) -> list:
-    """过滤占位成员（如特殊公演的「SNH48 Group」），避免写入无效演职人员。"""
+    """去掉空值与重复的成员名。"""
     result = []
     for member in members or []:
         name = str(member).strip()
-        if name and not PLACEHOLDER_MEMBER_RE.match(name) and name not in result:
+        if name and name not in result:
             result.append(name)
     return result
 
@@ -109,22 +106,48 @@ class NfoBuilder:
         return None
 
     @staticmethod
-    def _team_key(team_name: str):
-        """规范队伍名 → (分团代码, 队伍代码)，用于查历史任职区间。"""
+    def _team_config(team_name: str) -> dict:
+        """按规范名/目录名找到 teams.yaml 中的队伍定义。"""
         canon = canon_team(team_name)
         for team in group_config.teams():
             if team.get("name") == team_name or canon_team(team.get("name", "")) == canon:
-                return team.get("group", ""), team.get("code", "")
+                return team
+        return {}
+
+    def _team_key(self, team_name: str):
+        """规范队伍名 → (分团代码, 队伍代码)，用于查历史任职区间。"""
+        team = self._team_config(team_name)
+        if team:
+            return team.get("group", ""), team.get("code", "")
         return None
 
+    def _roster_members(self, team_name: str) -> list:
+        """按队伍名取花名册成员；名字对不上时用规范名再匹配一次。
+
+        特殊公演在 roster.yaml 里叫「特殊公演」，但下载记录里的规范名是
+        「SNH48 GROUP」，这里需要兜住这种别名。
+        """
+        team_data = self.roster.get(team_name)
+        if team_data is not None:
+            return clean_members(team_data.get('members', []))
+        canon = canon_team(team_name)
+        full = self._load_roster(self.config_path, enabled_only=False)
+        for name, data in full.items():
+            if name == team_name or canon_team(name) == canon:
+                return clean_members(data.get('members', []))
+        return []
     def _members_for(self, title: str, team_name: str, year: str) -> tuple:
         """演职人员来源优先级。
 
+        0) cast_mode=roster 的队伍（拼盘/特别公演）直接用花名册配置
         1) 剧目名单（本队命中，最准确）
         2) 历史任职区间（按公演日期回溯当期阵容）
         3) 剧目名单（跨队兜底，用于队名判错或特殊公演）
         4) 当前花名册
         """
+        if self._team_config(team_name).get("cast_mode") == "roster":
+            return self._roster_members(team_name), "roster"
+
         members = self._match_performance(title, team_name, scoped=True)
         if members:
             return clean_members(members), "performances"
@@ -144,11 +167,7 @@ class NfoBuilder:
         if other:
             return clean_members(other), "performances_other"
 
-        team_data = self.roster.get(team_name)
-        if team_data is None:
-            # 未开启自动入库的队伍（手动下载场景）不在 self.roster 里
-            team_data = self._load_roster(self.config_path, enabled_only=False).get(team_name, {})
-        return clean_members(team_data.get('members', [])), "roster"
+        return self._roster_members(team_name), "roster"
     def _prettify_xml(self, elem) -> str:
         rough_string = ET.tostring(elem, 'utf-8')
         reparsed = minidom.parseString(rough_string)
