@@ -4,6 +4,7 @@ import threading
 import yaml
 import requests
 import datetime
+import group_config
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -283,6 +284,28 @@ def trigger_scan_manually(background_tasks: BackgroundTasks):
 @app.get("/api/config")
 def get_config():
     return get_current_config()
+
+@app.get("/api/groups")
+def list_groups():
+    """分团列表：前端标签页顺序、主题色与启用状态都由这里下发。"""
+    groups = group_config.groups()
+    teams = group_config.teams()
+    result = []
+    for item in groups:
+        code = item.get("code", "")
+        result.append({
+            "code": code,
+            "name": item.get("name", code),
+            "theme_color": item.get("theme_color") or "#64748b",
+            "enabled": bool(item.get("enabled", False)),
+            "bilibili_mid": item.get("bilibili_mid"),
+            "trainee": item.get("trainee") or {},
+            "teams": [
+                {"code": team.get("code"), "name": team.get("name")}
+                for team in teams if team.get("group") == code
+            ],
+        })
+    return result
 
 @app.post("/api/config")
 def save_config(config: dict):

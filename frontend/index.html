@@ -21,6 +21,35 @@
             50% { background-position: 100% 50%; }
             100% { background-position: 0% 50%; }
         }
+        .tabbar { position: sticky; top: 0; z-index: 30; }
+        .tab-button {
+            --tab-color: #475569;
+            --tab-color-soft: #4755691f;
+            padding: .5rem .95rem;
+            border-radius: .75rem;
+            border: 1px solid transparent;
+            background: #fff;
+            color: #475569;
+            font-size: .875rem;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: all .2s ease;
+        }
+        .tab-button:hover { border-color: var(--tab-color); color: var(--tab-color); }
+        .tab-button.tab-active {
+            color: var(--tab-color);
+            background: var(--tab-color-soft);
+            border-color: var(--tab-color);
+        }
+        .tab-button .tab-dot {
+            display: inline-block;
+            width: .5rem; height: .5rem;
+            border-radius: 9999px;
+            background: var(--tab-color);
+            margin-right: .4rem;
+            vertical-align: middle;
+        }
+        .tab-button.tab-disabled { opacity: .55; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans selection:bg-pink-200">
@@ -53,104 +82,36 @@
             </div>
         </header>
 
-        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-            
-            <div class="xl:col-span-4 space-y-6">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">任务引擎</h2>
-                    </div>
-                    
-                    <button @click="triggerScan" :disabled="isScanning" class="w-full relative bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
-                        <span class="relative z-10">{{ isScanning ? '巡视指令已发送...' : '立即扫描录播更新' }}</span>
+        <div class="tabbar -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 py-3 mb-6 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+            <div class="flex items-center gap-3 flex-wrap">
+                <nav class="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1">
+                    <button v-for="g in groups" :key="'tab-' + g.code"
+                            @click="selectTab('group-' + g.code)"
+                            :style="{ '--tab-color': g.theme_color, '--tab-color-soft': g.theme_color + '1f' }"
+                            class="tab-button"
+                            :class="{ 'tab-active': activeTab === 'group-' + g.code, 'tab-disabled': !g.enabled }">
+                        <span class="tab-dot"></span>{{ g.name }}
                     </button>
-                    <p class="text-xs text-slate-400 mt-3 text-center">{{ scanMessage }}</p>
-                </div>
-
-                <!-- Auto Scanner 调度 -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">自动扫描调度</h2>
-                    </div>
-
-                    <!-- 开关 -->
-                    <div class="flex items-center justify-between mb-4">
-                        <span class="text-sm text-slate-600">启用自动扫描</span>
-                        <button @click="config.scheduler.enabled = !config.scheduler.enabled"
-                            :class="config.scheduler?.enabled ? 'bg-indigo-500' : 'bg-slate-300'"
-                            class="relative w-11 h-6 rounded-full transition-colors duration-300">
-                            <span :class="config.scheduler?.enabled ? 'translate-x-5' : 'translate-x-0'"
-                                class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300"></span>
-                        </button>
-                    </div>
-
-                    <!-- 模式选择 -->
-                    <div v-if="config.scheduler?.enabled" class="mb-4">
-                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描模式</label>
-                        <div class="flex gap-2">
-                            <button @click="setSchedulerMode('cron')"
-                                :class="config.scheduler.mode === 'cron' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">每日定时</button>
-                            <button @click="setSchedulerMode('interval')"
-                                :class="config.scheduler.mode === 'interval' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">间隔轮询</button>
-                        </div>
-                    </div>
-
-                    <!-- Cron 模式：小时选择 -->
-                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'cron'" class="mb-4">
-                        <label class="text-sm font-medium text-slate-600 block mb-2">每日执行时间</label>
-                        <div class="flex flex-wrap gap-1.5 mb-2">
-                            <span v-for="h in (config.scheduler.cron_hours || []).sort((a,b)=>a-b)"
-                                class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md text-xs font-medium">
-                                {{ String(h).padStart(2,'0') }}:00
-                                <button @click="removeCronHour(h)" class="text-indigo-400 hover:text-red-500 transition">✕</button>
-                            </span>
-                        </div>
-                        <select v-if="availableHours.length > 0" @change="addCronHour(Number($event.target.value)); $event.target.value=''"
-                            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 outline-none focus:ring-2 focus:ring-indigo-400">
-                            <option value="" disabled selected>+ 添加时间</option>
-                            <option v-for="h in availableHours" :value="h">{{ String(h).padStart(2,'0') }}:00</option>
-                        </select>
-                    </div>
-
-                    <!-- Interval 模式：间隔小时 -->
-                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'interval'" class="mb-4">
-                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描间隔</label>
-                        <div class="flex items-center gap-2">
-                            <input type="number" v-model.number="config.scheduler.interval_hours"
-                                min="1" max="168"
-                                class="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-center outline-none focus:ring-2 focus:ring-indigo-400">
-                            <span class="text-sm text-slate-500">小时</span>
-                        </div>
-                    </div>
-
-                    <!-- 下载范围 -->
-                    <div class="mb-4 pt-4 border-t border-slate-50">
-                        <label class="text-sm font-medium text-slate-600 block mb-2">自动入库下载范围（含立即扫描）</label>
-                        <div class="flex gap-2">
-                            <button @click="config.auto_download_scope = 'full'"
-                                :class="config.auto_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
-                            <button @click="config.auto_download_scope = 'mc'"
-                                :class="config.auto_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
-                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
-                        </div>
-                        <p class="text-xs text-slate-400 mt-2">「仅MC环节」过滤歌曲分P，仅合并 MC / 拉票 / 生日等特殊环节，标题与目录追加「MC合集」。</p>
-                    </div>
-
-                    <!-- 状态 -->
-                    <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
-                </div>
-
+                    <button @click="selectTab('queue')" class="tab-button"
+                            :class="{ 'tab-active': activeTab === 'queue' }">下载队列</button>
+                    <button @click="selectTab('settings')" class="tab-button"
+                            :class="{ 'tab-active': activeTab === 'settings' }">设置</button>
+                </nav>
+                <button @click="saveConfig" :disabled="isSavingConfig"
+                        class="bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-bold py-2 px-5 rounded-xl transition-all transform active:scale-95 shrink-0">
+                    {{ isSavingConfig ? '保存中...' : '保存并应用配置' }}
+                </button>
+            </div>
+        </div>
+        <div data-panel="group-snh" v-show="activeTab === 'group-snh'">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                <div class="xl:col-span-4 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         <h2 class="text-lg font-bold text-slate-800">星梦剧院公演日历</h2>
                     </div>
-                    
+
                     <div class="flex justify-between items-center mb-2 px-1">
                         <button @click="changeMonth(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -217,75 +178,8 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[500px]">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">下载队列</h2>
-                    </div>
-                    
-                    <div class="overflow-y-auto no-scrollbar flex-1 bg-slate-50 rounded-xl p-3 border border-slate-100">
-                        <div v-if="Object.keys(activeTasks).length > 0" class="mb-5 space-y-3">
-                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> 正在处理
-                            </h4>
-                            <div v-for="(task, bvid) in activeTasks" :key="'active'+bvid" class="bg-white border border-blue-200 p-3 rounded-lg shadow-sm relative overflow-hidden">
-                                <div class="absolute top-0 left-0 h-1 bg-slate-100 w-full">
-                                    <div class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-[1500ms] ease-out"
-                                         :style="{ width: (parseFloat(task.progress) || 0) + '%' }"></div>
-                                </div>
-                                <div class="flex justify-between items-start mt-2">
-                                    <div class="w-3/4">
-                                        <p class="text-sm font-bold text-slate-800 line-clamp-1" :title="task.title">{{ task.title }}</p>
-                                        <p class="text-xs mt-1 font-medium" :class="task.status.includes('失败') ? 'text-red-500' : 'text-blue-500'">
-                                            {{ task.status }} <span v-if="task.p_total && task.p_total !== '?'">({{ task.p_done || 0 }}/{{ task.p_total }} P)</span>
-                                        </p>
-                                        <p v-if="task.part_progress && Object.keys(task.part_progress).length > 1" class="text-[10px] text-slate-400 mt-0.5 font-mono">
-                                            <template v-for="(pct, pn) in task.part_progress" :key="pn">P{{ pn }}:{{ pct }} </template>
-                                        </p>
-                                    </div>
-                                    <span class="text-sm font-mono font-extrabold" :class="task.status.includes('失败') ? 'text-red-500' : 'text-indigo-600'">
-                                        {{ task.progress }}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div v-if="downloadQueue.length > 0" class="space-y-2">
-                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">排队中 ({{ downloadQueue.length }})</h4>
-                            <div v-for="(item, idx) in downloadQueue" :key="'q'+item.bvid+idx"
-                                 class="bg-white border border-slate-100 p-3 rounded-lg flex items-center justify-between">
-                                <div class="min-w-0 pr-2">
-                                    <p class="text-sm font-bold text-slate-700 line-clamp-1" :title="item.title">{{ item.title }}</p>
-                                    <span class="text-[10px] font-mono text-slate-400">{{ item.bvid }}</span>
-                                </div>
-                                <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
-                                      :class="item.force ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'">
-                                    {{ item.force ? '洗版为' + (item.scope === 'mc' ? '仅MC' : '全场') : '等待下载' }}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div v-if="Object.keys(activeTasks).length === 0 && downloadQueue.length === 0"
-                             class="h-full flex items-center justify-center text-slate-400 text-sm">当前没有下载任务</div>
-                    </div>
                 </div>
-            </div>
-
-            <div class="xl:col-span-8 space-y-6">
-                
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 flex justify-between items-center sticky top-4 z-20">
-                    <div>
-                        <h2 class="text-lg font-bold text-slate-800">数据中心</h2>
-                        <p class="text-xs text-slate-500">修改后需点击保存才会生效</p>
-                    </div>
-                    <button @click="saveConfig" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-6 rounded-xl shadow-lg shadow-purple-200 transition-all transform active:scale-95 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
-                        保存并应用配置
-                    </button>
-                </div>
-
-                <!-- 投稿批量下载 -->
+                <div class="xl:col-span-8 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2">
@@ -392,24 +286,6 @@
                         </div>
                     </div>
                 </div>
-
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-6">
-                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        <h3 class="text-lg font-bold text-slate-800">监听账号 (B站主页)</h3>
-                    </div>
-                    <div class="space-y-3">
-                        <TransitionGroup name="list">
-                            <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
-                                <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
-                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                            </div>
-                        </TransitionGroup>
-                    </div>
-                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
-                </div>
-
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-2">
@@ -420,7 +296,7 @@
                     </div>
 
                     <div class="space-y-6">
-                        <TransitionGroup name="list">
+                        <transition-group name="list">
                             <div v-for="(team, tIndex) in config.teams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1" :class="team.enabled ? 'bg-pink-400' : 'bg-slate-300'"></div>
                                 <div class="flex justify-between items-start mb-4 pl-2">
@@ -429,9 +305,9 @@
                                             <input type="checkbox" v-model="team.enabled" class="sr-only peer">
                                             <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-pink-500"></div>
                                         </label>
-                                        
+
                                         <input v-model="team.name" placeholder="队伍名称" class="font-bold text-lg bg-transparent border-b border-dashed border-slate-300 focus:border-pink-500 focus:outline-none flex-1 min-w-0 py-1">
-                                        
+
                                         <button @click="team.notify = !team.notify" 
                                                 class="w-9 h-9 flex shrink-0 items-center justify-center rounded-lg border transition-all hover:scale-105 active:scale-95"
                                                 :class="team.notify ? 'bg-green-500 border-green-600 text-white shadow-md shadow-green-200' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-green-500'" 
@@ -441,7 +317,7 @@
                                             </svg>
                                         </button>
                                     </div>
-                                    
+
                                     <button @click="removeTeam(tIndex)" class="text-slate-400 hover:text-red-500 transition shrink-0 ml-2 mt-1.5">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                     </button>
@@ -475,17 +351,195 @@
                                     </div>
                                 </div>
                             </div>
-                        </TransitionGroup>
+                        </transition-group>
                     </div>
                 </div>
+                </div>
             </div>
+        </div>
+        <div data-panel="queue" v-show="activeTab === 'queue'">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                <div class="xl:col-span-4 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">任务引擎</h2>
+                    </div>
+
+                    <button @click="triggerScan" :disabled="isScanning" class="w-full relative bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
+                        <span class="relative z-10">{{ isScanning ? '巡视指令已发送...' : '立即扫描录播更新' }}</span>
+                    </button>
+                    <p class="text-xs text-slate-400 mt-3 text-center">{{ scanMessage }}</p>
+                </div>
+                </div>
+                <div class="xl:col-span-8 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[500px]">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">下载队列</h2>
+                    </div>
+
+                    <div class="overflow-y-auto no-scrollbar flex-1 bg-slate-50 rounded-xl p-3 border border-slate-100">
+                        <div v-if="Object.keys(activeTasks).length > 0" class="mb-5 space-y-3">
+                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
+                                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> 正在处理
+                            </h4>
+                            <div v-for="(task, bvid) in activeTasks" :key="'active'+bvid" class="bg-white border border-blue-200 p-3 rounded-lg shadow-sm relative overflow-hidden">
+                                <div class="absolute top-0 left-0 h-1 bg-slate-100 w-full">
+                                    <div class="h-full bg-gradient-to-r from-blue-400 to-indigo-500 transition-all duration-[1500ms] ease-out"
+                                         :style="{ width: (parseFloat(task.progress) || 0) + '%' }"></div>
+                                </div>
+                                <div class="flex justify-between items-start mt-2">
+                                    <div class="w-3/4">
+                                        <p class="text-sm font-bold text-slate-800 line-clamp-1" :title="task.title">{{ task.title }}</p>
+                                        <p class="text-xs mt-1 font-medium" :class="task.status.includes('失败') ? 'text-red-500' : 'text-blue-500'">
+                                            {{ task.status }} <span v-if="task.p_total && task.p_total !== '?'">({{ task.p_done || 0 }}/{{ task.p_total }} P)</span>
+                                        </p>
+                                        <p v-if="task.part_progress && Object.keys(task.part_progress).length > 1" class="text-[10px] text-slate-400 mt-0.5 font-mono">
+                                            <template v-for="(pct, pn) in task.part_progress" :key="pn">P{{ pn }}:{{ pct }} </template>
+                                        </p>
+                                    </div>
+                                    <span class="text-sm font-mono font-extrabold" :class="task.status.includes('失败') ? 'text-red-500' : 'text-indigo-600'">
+                                        {{ task.progress }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="downloadQueue.length > 0" class="space-y-2">
+                            <h4 class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">排队中 ({{ downloadQueue.length }})</h4>
+                            <div v-for="(item, idx) in downloadQueue" :key="'q'+item.bvid+idx"
+                                 class="bg-white border border-slate-100 p-3 rounded-lg flex items-center justify-between">
+                                <div class="min-w-0 pr-2">
+                                    <p class="text-sm font-bold text-slate-700 line-clamp-1" :title="item.title">{{ item.title }}</p>
+                                    <span class="text-[10px] font-mono text-slate-400">{{ item.bvid }}</span>
+                                </div>
+                                <span class="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                                      :class="item.force ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-500 border-slate-200'">
+                                    {{ item.force ? '洗版为' + (item.scope === 'mc' ? '仅MC' : '全场') : '等待下载' }}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-if="Object.keys(activeTasks).length === 0 && downloadQueue.length === 0"
+                             class="h-full flex items-center justify-center text-slate-400 text-sm">当前没有下载任务</div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+        <div data-panel="settings" v-show="activeTab === 'settings'">
+            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                <div class="xl:col-span-4 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">自动扫描调度</h2>
+                    </div>
+
+                    <!-- 开关 -->
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="text-sm text-slate-600">启用自动扫描</span>
+                        <button @click="config.scheduler.enabled = !config.scheduler.enabled"
+                            :class="config.scheduler?.enabled ? 'bg-indigo-500' : 'bg-slate-300'"
+                            class="relative w-11 h-6 rounded-full transition-colors duration-300">
+                            <span :class="config.scheduler?.enabled ? 'translate-x-5' : 'translate-x-0'"
+                                class="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-300"></span>
+                        </button>
+                    </div>
+
+                    <!-- 模式选择 -->
+                    <div v-if="config.scheduler?.enabled" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描模式</label>
+                        <div class="flex gap-2">
+                            <button @click="setSchedulerMode('cron')"
+                                :class="config.scheduler.mode === 'cron' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">每日定时</button>
+                            <button @click="setSchedulerMode('interval')"
+                                :class="config.scheduler.mode === 'interval' ? 'bg-indigo-50 text-indigo-700 border-indigo-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">间隔轮询</button>
+                        </div>
+                    </div>
+
+                    <!-- Cron 模式：小时选择 -->
+                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'cron'" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">每日执行时间</label>
+                        <div class="flex flex-wrap gap-1.5 mb-2">
+                            <span v-for="h in (config.scheduler.cron_hours || []).sort((a,b)=>a-b)"
+                                class="inline-flex items-center gap-1 px-2.5 py-1 bg-indigo-100 text-indigo-700 rounded-md text-xs font-medium">
+                                {{ String(h).padStart(2,'0') }}:00
+                                <button @click="removeCronHour(h)" class="text-indigo-400 hover:text-red-500 transition">✕</button>
+                            </span>
+                        </div>
+                        <select v-if="availableHours.length > 0" @change="addCronHour(Number($event.target.value)); $event.target.value=''"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-500 outline-none focus:ring-2 focus:ring-indigo-400">
+                            <option value="" disabled selected>+ 添加时间</option>
+                            <option v-for="h in availableHours" :value="h">{{ String(h).padStart(2,'0') }}:00</option>
+                        </select>
+                    </div>
+
+                    <!-- Interval 模式：间隔小时 -->
+                    <div v-if="config.scheduler?.enabled && config.scheduler.mode === 'interval'" class="mb-4">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">扫描间隔</label>
+                        <div class="flex items-center gap-2">
+                            <input type="number" v-model.number="config.scheduler.interval_hours"
+                                min="1" max="168"
+                                class="w-20 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-center outline-none focus:ring-2 focus:ring-indigo-400">
+                            <span class="text-sm text-slate-500">小时</span>
+                        </div>
+                    </div>
+
+                    <!-- 下载范围 -->
+                    <div class="mb-4 pt-4 border-t border-slate-50">
+                        <label class="text-sm font-medium text-slate-600 block mb-2">自动入库下载范围（含立即扫描）</label>
+                        <div class="flex gap-2">
+                            <button @click="config.auto_download_scope = 'full'"
+                                :class="config.auto_download_scope === 'full' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">整场公演</button>
+                            <button @click="config.auto_download_scope = 'mc'"
+                                :class="config.auto_download_scope === 'mc' ? 'bg-cyan-50 text-cyan-700 border-cyan-300' : 'bg-slate-50 text-slate-600 border-slate-200'"
+                                class="flex-1 px-3 py-2 rounded-lg border text-sm font-medium transition">仅MC环节</button>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-2">「仅MC环节」过滤歌曲分P，仅合并 MC / 拉票 / 生日等特殊环节，标题与目录追加「MC合集」。</p>
+                    </div>
+
+                    <!-- 状态 -->
+                    <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
+                </div>
+                </div>
+                <div class="xl:col-span-8 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-6">
+                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <h3 class="text-lg font-bold text-slate-800">监听账号 (B站主页)</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <transition-group name="list">
+                            <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        </transition-group>
+                    </div>
+                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
+                </div>
+                </div>
+            </div>
+        </div>
+        <div v-for="g in groups" :key="'ph-' + g.code"
+             v-show="activeTab === 'group-' + g.code && !g.enabled"
+             class="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 text-center">
+            <div class="w-12 h-12 mx-auto mb-4 rounded-full" :style="{ background: g.theme_color + '1f', color: g.theme_color }"></div>
+            <h2 class="text-xl font-bold text-slate-800 mb-2">{{ g.name }} 尚未接入</h2>
+            <p class="text-sm text-slate-500">分团配置已完成，排期抓取、下载与素材会在阶段 5 逐个开启。</p>
         </div>
     </div>
 
     <script>
         const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
 
-        createApp({
+        const app = createApp({
             setup() {
                 const API_BASE = "http://192.168.1.12:8095/api";
                 const TICKET_API = "http://192.168.1.12:8099/api/tickets";
@@ -495,8 +549,33 @@
                 const config = ref({ apprise_url: "", subscriptions: [], teams: [], manual_subs: [], emby: { server_url: "", api_key: "", library_name: "公演直播回放" }, auto_download_scope: "full", manual_download_scope: "full" });
                 const scanMessage = ref("");
                 const isScanning = ref(false);
+                // 标签页：分团（按 /api/groups 生成）+ 下载队列 + 设置
+                const groups = ref([]);
+                const activeTab = ref("group-snh");
+                const isSavingConfig = ref(false);
                 let pollInterval = null;
                 let embyPoll = null;
+
+                const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['queue', 'settings']);
+
+                const selectTab = (key) => {
+                    activeTab.value = key;
+                    if (location.hash !== '#/' + key) {
+                        history.replaceState(null, '', '#/' + key);
+                    }
+                };
+
+                const loadGroups = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/groups`);
+                        if (res.ok) groups.value = await res.json();
+                    } catch (e) {
+                        console.error('加载分团配置失败', e);
+                    }
+                    const keys = tabKeys();
+                    const fromHash = (location.hash || '').replace(/^#\//, '');
+                    selectTab(keys.includes(fromHash) ? fromHash : (keys[0] || 'settings'));
+                };
 
                 // 投稿批量下载（数据来自 snh48.db 的 uploads 表）
                 const uploads = ref([]);
@@ -889,6 +968,7 @@
                 };
 
                 const saveConfig = async () => {
+                    isSavingConfig.value = true;
                     try {
                         const res = await fetch(`${API_BASE}/config`, {
                             method: 'POST',
@@ -898,6 +978,7 @@
                         const data = await res.json();
                         alert('✅ ' + data.message);
                     } catch (e) { alert('❌ 保存失败'); }
+                    finally { isSavingConfig.value = false; }
                 };
 
                 // 🚀 处理特殊公演的手动订阅
@@ -960,6 +1041,7 @@
                 };
 
                 onMounted(() => {
+                    loadGroups();
                     fetchDownloadQueue();
                     fetchConfig();
                     fetchSchedules();
@@ -1000,10 +1082,14 @@
                     uploadSelected, uploadStats, uploadStatsText, uploadSubmitting, uploadBvCandidate,
                     uploadAction, uploadScopeLabel,
                     uploadRepair, runRepairAction,
-                    searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv
+                    searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,
+                    groups, activeTab, isSavingConfig, selectTab, loadGroups
                 };
             }
-        }).mount('#app')
+        });
+        // 内联模板里的标签会被浏览器转成小写，内置过渡组件需要显式注册
+        app.component('transition-group', Vue.TransitionGroup);
+        app.mount('#app');
     </script>
 </body>
 </html>
