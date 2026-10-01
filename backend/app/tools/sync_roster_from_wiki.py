@@ -5,7 +5,8 @@
 - groups.yaml 中每个队伍的 sources（默认 Category:<fandom>）
 - 解析成员页 Infobox：simplified_chinese(中文名) / theme(分团) / team(当前队伍) /
   generation(期数) / active(在册状态) / image(照片)
-- 常规队伍要求 team 字段包含该队并标注 present；训练生队伍以配置的分类为准
+- 常规队伍要求 team 字段中存在指向该队且仍开放的条目（标注 present/至今，
+  或未标注日期区间）；训练生队伍以配置的分类为准
 - 只更新 roster.yaml 的 members，保留 keywords / oshis / notify / enabled /
   audio_offset 等人工字段
 
@@ -71,10 +72,41 @@ def clean_name(value: str) -> str:
     return re.sub(r"<[^>]+>", "", value).strip()
 
 
+def team_still_active(team_field: str, team_name: str) -> bool:
+    """判断 team 字段里是否存在仍属于 team_name 的在册条目。
+
+    条目形态：
+      [[Team SII]]                    → 未标注日期，视为在册
+      [[Team SII]] (2020-present)     → 在册
+      [[Team SII]] (2019–至今)        → 在册
+      [[Team X]] (Concurrent: 2025-2026) → 已结束
+    只用去掉队友标记（如 Concurrent）的区间判断，避免把兼任历史当成在册。
+    """
+    for entry in re.split(r"<br\s*/?>|\n", team_field or ""):
+        if re.search(r"\[\[" + re.escape(team_name) + r"(\]\]|\|)", entry):
+            pass
+        elif "[[" not in entry and team_name in entry:
+            pass
+        else:
+            continue
+        ranges = re.findall(r"\(([^)]*)\)", entry)
+        if not ranges:
+            return True
+        if any("present" in item.lower() or "至今" in item for item in ranges):
+            return True
+    return False
+
+
 def parse_member_page(text):
     def field(name):
         match = re.search(r"\|\s*" + name + r"\s*=\s*(.+)", text or "")
         return match.group(1).strip() if match else ""
+
+    def team_raw():
+        """team 字段可能跨行列出多个队伍，需要读到下一个参数为止。"""
+        match = re.search(r"^\s*\|\s*team\s*=\s*(.*?)(?=^\s*\|\s*\w+\s*=|\}\})",
+                          text or "", re.M | re.S)
+        return match.group(1).strip() if match else field("team")
 
     name_raw = field("name")
     chinese = field("simplified_chinese")
@@ -85,7 +117,7 @@ def parse_member_page(text):
     return {
         "chinese": chinese,
         "theme": field("theme"),
-        "team": field("team"),
+        "team": team_raw(),
         "generation": field("generation"),
         "active": field("active"),
         "image": field("image"),
@@ -155,12 +187,10 @@ def collect_team_members(team_cfg, cache, refresh):
             continue
         if group_name and info.get("theme") != group_name:
             continue
-        # 要求 team 字段包含目标队伍（常规队伍用队名，训练生用 SNH48 Trainee 这类标记）
-        # 且仍在册（present / 至今），避免已转队或已毕业的成员混入
+        # 要求 team 字段里存在指向目标队伍且仍在册的条目（常规队伍用队名，
+        # 训练生用 SNH48 Trainee 这类标记），避免已转队或已毕业的成员混入
         team_field = info.get("team", "")
-        if fandom and fandom not in team_field:
-            continue
-        if "present" not in team_field and "至今" not in team_field:
+        if fandom and not team_still_active(team_field, fandom):
             continue
         if info["chinese"] in members:
             continue
