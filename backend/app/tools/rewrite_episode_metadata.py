@@ -41,6 +41,9 @@ CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 CONFIG_DIR = os.environ.get("CONFIG_DIR", "/config")
 BACKUP_DIR = os.path.join(CONFIG_DIR, "backups", "nfo")
 REPORT_PATH = os.path.join(CONFIG_DIR, "assets", "nfo_rewrite_report.json")
+# 只有生日公演用「按日期反推的当期阵容」直接覆盖：这类场次全队上场，
+# 反推结果比按年的任职区间准；其他场次（拼盘/专场）名单无从推断，保持原样
+BIRTHDAY_RE = re.compile(r"生日公演|生诞|生日特别公演")
 
 
 def log(message):
@@ -196,7 +199,9 @@ def main():
             match = re.search(r"(20\d{2})", video)
             year = match.group(1) if match else ""
 
-        members, source = builder._members_for(title, team, year) if year else ([], "unknown")
+        date_iso = f"{date[:4]}-{date[4:6]}-{date[6:8]}" if len(date) >= 8 else ""
+        members, source = (builder._members_for(title, team, year, date_iso)
+                           if year else ([], "unknown"))
         nfo_path, folder = find_episode_nfo(video)
         if not nfo_path:
             log(f"⚠️ {bvid} 未找到 NFO: {folder}")
@@ -216,10 +221,12 @@ def main():
                   "changed": not same or args.force}
         report["items"].append(detail)
 
-        # 剧目名单命中是最可靠的来源；历史任职区间按年匹配会带上已离队成员，
-        # 默认只用于补全原本没有演员表的剧集。
-        stage_matched = source.startswith("performances")
-        if not same and not stage_matched and old_names and not args.include_fallbacks:
+        # 剧目名单命中总是可靠；按日期反推的当期阵容只对生日公演直接覆盖。
+        # 按年的任职区间会带上年头已离队的成员，默认只补全空演员表。
+        reliable = source.startswith("performances")
+        if source == "stage_lineup" and BIRTHDAY_RE.search(title):
+            reliable = True
+        if not same and not reliable and old_names and not args.include_fallbacks:
             report["skipped"] += 1
             detail["changed"] = False
             log(f"[{source}] {date} {team} {bvid}: 跳过（回退来源，"

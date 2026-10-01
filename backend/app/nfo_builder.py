@@ -136,14 +136,68 @@ class NfoBuilder:
             if name == team_name or canon_team(name) == canon:
                 return clean_members(data.get('members', []))
         return []
-    def _members_for(self, title: str, team_name: str, year: str) -> tuple:
+
+    def _stages_of(self, team_name: str) -> list:
+        """该队伍所有带首演日期的剧目，按首演日期升序。"""
+        canon = canon_team(team_name)
+        stages = []
+        for perf in self.performances:
+            if canon_team(perf.get("team", "")) != canon:
+                continue
+            premiere = str(perf.get("premiere") or "")[:10]
+            if not re.match(r"\d{4}-\d{2}-\d{2}$", premiere):
+                continue
+            members = perf.get("members") or []
+            if not members:
+                continue
+            stages.append({
+                "title": perf.get("title", ""),
+                "premiere": premiere,
+                "finale": str(perf.get("finale") or "")[:10],
+                "premiere_members": perf.get("premiere_members") or members,
+                "finale_members": perf.get("finale_members") or [],
+            })
+        stages.sort(key=lambda item: item["premiere"])
+        return stages
+
+    def _lineup_members(self, team_name: str, date_str: str) -> list:
+        """按公演日期反推当期队伍阵容。
+
+        wiki 的任职区间只精确到年，年中转会无法区分；但每套剧目的首演/收官
+        阵容都带准确日期，构成一串更细的时间锚点：
+          - 当天在演的剧目已收官 → 首演阵容 ∪ 收官阵容
+          - 当天在演的剧目仍在演（该队最新一套）→ 首演阵容 ∪ 当前花名册，
+            以覆盖中途加入的成员
+          - 早于该队第一套已收录剧目 → 返回空，交由上层兜底
+        """
+        date = (date_str or "")[:10]
+        if not re.match(r"\d{4}-\d{2}-\d{2}$", date):
+            return []
+        stages = self._stages_of(team_name)
+        active = None
+        for index, stage in enumerate(stages):
+            if stage["premiere"] > date:
+                break
+            active = (index, stage)
+        if active is None:
+            return []
+        index, stage = active
+        members = list(stage["premiere_members"])
+        if stage["finale"]:
+            members += stage["finale_members"]
+        elif index == len(stages) - 1:
+            members += self._roster_members(team_name)
+        return clean_members(members)
+    def _members_for(self, title: str, team_name: str, year: str,
+                     date_str: str = "") -> tuple:
         """演职人员来源优先级。
 
         0) cast_mode=roster 的队伍（拼盘/特别公演）直接用花名册配置
         1) 剧目名单（本队命中，最准确）
-        2) 历史任职区间（按公演日期回溯当期阵容）
-        3) 剧目名单（跨队兜底，用于队名判错或特殊公演）
-        4) 当前花名册
+        2) 按公演日期反推的当期阵容（剧目首演/收官日期作锚点，比按年更准）
+        3) 历史任职区间（按年回溯，精度较粗）
+        4) 剧目名单（跨队兜底，用于队名判错或特殊公演）
+        5) 当前花名册
         """
         if self._team_config(team_name).get("cast_mode") == "roster":
             return self._roster_members(team_name), "roster"
@@ -151,6 +205,10 @@ class NfoBuilder:
         members = self._match_performance(title, team_name, scoped=True)
         if members:
             return clean_members(members), "performances"
+
+        lineup = self._lineup_members(team_name, date_str or str(year))
+        if lineup:
+            return lineup, "stage_lineup"
 
         key = self._team_key(team_name)
         if self.member_store and key:
@@ -216,7 +274,7 @@ class NfoBuilder:
             ET.SubElement(ep_details, "aired").text = date_str
             ET.SubElement(ep_details, "plot").text = plot
 
-            members, source = self._members_for(perf_title, team_name, year)
+            members, source = self._members_for(perf_title, team_name, year, date_str)
             print(f"🎭 [NFO] {date_str} {team_name} 演职人员来源: {source}（{len(members)} 人）",
                   flush=True)
             for member in members:
