@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wiki_client import (  # noqa: E402
     category_members,
     field,
+    failed_sources,
     load_cache,
     log,
     mbox_members,
@@ -150,6 +151,8 @@ def main():
     parser.add_argument("--apply", action="store_true", help="写出 performances.wiki.yaml")
     parser.add_argument("--refresh-cache", action="store_true", help="忽略缓存重新抓取")
     parser.add_argument("--all-groups", action="store_true", help="包含未启用分团")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="抓取有失败时也照常写出（默认拒绝，避免生成残缺名单）")
     args = parser.parse_args()
 
     with open(GROUPS_PATH, encoding="utf-8") as fh:
@@ -222,6 +225,14 @@ def main():
     if not args.apply:
         log("dry-run：未写出 yaml")
         return
+
+    failures = failed_sources()
+    if failures and not args.allow_partial:
+        log(f"\n⚠️ 有 {len(failures)} 个来源抓取失败，为避免生成残缺剧目名单，"
+            f"本次未写出 yaml。确认可接受时加 --allow-partial 重跑：")
+        for item in failures:
+            log(f"   - {item}")
+        sys.exit(1)
 
     header = (
         "# 由 tools/sync_performances_from_wiki.py 自动生成，请勿手工编辑。\n"

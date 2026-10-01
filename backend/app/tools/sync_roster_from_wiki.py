@@ -26,6 +26,7 @@ import yaml
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wiki_client import (  # noqa: E402
     category_members,
+    failed_sources,
     get_member,
     load_cache,
     log,
@@ -99,6 +100,8 @@ def main():
     parser = argparse.ArgumentParser(description="从 wiki 同步队伍花名册")
     parser.add_argument("--apply", action="store_true", help="写入 roster.yaml")
     parser.add_argument("--refresh-cache", action="store_true", help="忽略缓存重新抓取")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="抓取有失败时也照常写入（默认拒绝，避免覆盖成不完整名单）")
     args = parser.parse_args()
 
     with open(ROSTER_PATH, encoding="utf-8") as fh:
@@ -160,6 +163,14 @@ def main():
     if not args.apply:
         log("dry-run：未修改 roster.yaml")
         return
+
+    failures = failed_sources()
+    if failures and not args.allow_partial:
+        log(f"\n⚠️ 有 {len(failures)} 个来源抓取失败，为避免覆盖成不完整名单，"
+            f"本次未写入 roster.yaml。确认可接受时加 --allow-partial 重跑：")
+        for item in failures:
+            log(f"   - {item}")
+        sys.exit(1)
 
     for item in report["teams"]:
         name = item["team"]

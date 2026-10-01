@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from wiki_client import (  # noqa: E402
     category_members,
+    failed_sources,
     get_member,
     load_cache,
     log,
@@ -107,6 +108,8 @@ def main():
     parser.add_argument("--apply", action="store_true", help="写入数据库")
     parser.add_argument("--refresh-cache", action="store_true", help="忽略缓存重新抓取")
     parser.add_argument("--all-groups", action="store_true", help="包含未启用分团")
+    parser.add_argument("--allow-partial", action="store_true",
+                        help="抓取有失败时也照常写入（默认拒绝，避免覆盖成不完整数据）")
     args = parser.parse_args()
 
     with open(GROUPS_PATH, encoding="utf-8") as fh:
@@ -159,6 +162,19 @@ def main():
     if not args.apply:
         log("dry-run：未写入数据库")
         return
+
+    failures = failed_sources()
+    if failures and not args.allow_partial:
+        log(f"\n⚠️ 有 {len(failures)} 个来源抓取失败，为避免把这些结果覆盖进数据库，"
+            f"本次未写入。确认可接受时加 --allow-partial 重跑：")
+        for item in failures:
+            log(f"   - {item}")
+        sys.exit(1)
+
+    if not records and not args.allow_partial:
+        log("\n⚠️ 本次没有抓到任何任职区间（配置或网络异常），已跳过写入以免清空数据；"
+            "确实要清空时加 --allow-partial")
+        sys.exit(1)
 
     store = MemberStore(DB_PATH)
     count = store.replace_all(records)

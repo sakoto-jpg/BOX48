@@ -28,8 +28,21 @@ CACHE_PATH = os.environ.get("WIKI_MEMBER_CACHE", "/config/assets/wiki_members_ca
 CACHE_TTL = 7 * 24 * 3600
 # 解析逻辑变更时递增，旧版本缓存会按新规则重新抓取
 CACHE_VERSION = 2
+# 本轮抓取失败的来源（分类或页面）。调用方在写库/写文件前应检查，
+# 避免把「抓取不完整」的结果当成完整结果覆盖掉好数据。
+FAILED_SOURCES = []
+
+
+def record_failure(source: str, exc) -> None:
+    FAILED_SOURCES.append(str(source))
+    log(f"  ⚠️ {source} 抓取失败: {exc}")
+
+
+def failed_sources() -> list:
+    return list(dict.fromkeys(FAILED_SOURCES))
 
 TEAM_ENTRY_RE = re.compile(r"\[\[([^\]\|]+)(?:\|([^\]]*))?\]\]")
+FORMER_PREFIX_RE = re.compile(r"^(former|前)\s*", re.I)
 TEAM_RANGE_RE = re.compile(r"(20\d{2})\s*[-–—~]\s*(present|至今|20\d{2})", re.I)
 TEAM_YEAR_RE = re.compile(r"(20\d{2})")
 
@@ -38,7 +51,7 @@ def log(message):
     print(message, flush=True)
 
 
-def wiki_api(params, retries=3):
+def wiki_api(params, retries=4):
     params = dict(params, format="json", formatversion=2)
     url = f"{API}?{urllib.parse.urlencode(params)}"
     for attempt in range(1, retries + 1):
@@ -49,14 +62,19 @@ def wiki_api(params, retries=3):
         except Exception as exc:
             if attempt >= retries:
                 raise
-            wait = attempt * 5
+            wait = attempt * 8
             log(f"  ⚠️ wiki 请求失败（{attempt}/{retries}）: {exc}；{wait}s 后重试")
             time.sleep(wait)
 
 
 def category_members(category, limit=500):
-    data = wiki_api({"action": "query", "list": "categorymembers",
-                     "cmtitle": f"Category:{category}", "cmlimit": limit})
+    try:
+        data = wiki_api({"action": "query", "list": "categorymembers",
+                         "cmtitle": f"Category:{category}", "cmlimit": limit})
+    except Exception as exc:
+        # 单个分类抓取失败不应中断整轮同步；报告里该来源会是 0 条，方便发现
+        record_failure(f"分类 {category}", exc)
+        return []
     return [
         item["title"] for item in data.get("query", {}).get("categorymembers", [])
         if item.get("title") and not item["title"].startswith("Category:")
@@ -67,6 +85,11 @@ def clean_name(value: str) -> str:
     """处理「现用名<br>曾用名」这类字段，取第一段并去掉标签。"""
     value = re.split(r"<br\s*/?>", value or "", flags=re.I)[0]
     return re.sub(r"<[^>]+>", "", value).strip()
+
+
+def canonical_team_name(value: str) -> str:
+    """wiki 队伍名归一：部分成员页把历史队伍写成 `[[Former Team NIII]]`。"""
+    return FORMER_PREFIX_RE.sub("", (value or "").strip()).strip()
 
 
 def plain_text(value: str) -> str:
@@ -139,12 +162,14 @@ def split_team_entries(team_field: str, assume_open: bool = False) -> list:
         if not ranges and assume_open and not inactive:
             ranges.append((None, None))
         display = (match.group(2) or "").lower()
+        raw_team = match.group(1).strip()
+        prefixed_former = bool(FORMER_PREFIX_RE.match(raw_team))
         entries.append({
-            "team": match.group(1).strip(),
+            "team": canonical_team_name(raw_team),
             "ranges": ranges,
             "concurrent": concurrent,
             "inactive": inactive,
-            "former": "former" in display or "前" in display,
+            "former": prefixed_former or "former" in display or "前" in display,
             "raw": text[match.start():end].strip(),
         })
     return entries
@@ -223,7 +248,14 @@ def get_member(page, cache=None, refresh=False, cache_path: str = None):
             if data.get("chinese"):
                 data["chinese"] = clean_name(data["chinese"])
             return data
-    data = wiki_api({"action": "parse", "page": page, "prop": "wikitext"})
+    try:
+        data = wiki_api({"action": "parse", "page": page, "prop": "wikitext"})
+    except Exception as exc:
+        record_failure(f"页面 {page}", exc)
+        return {}
+    if not data.get("parse"):
+        record_failure(f"页面 {page}", "无内容")
+        return {}
     info = parse_member_page(data.get("parse", {}).get("wikitext", ""))
     if cache is not None:
         cache[page] = {"ts": time.time(), "v": CACHE_VERSION, "data": info}
@@ -254,10 +286,14 @@ def resolve_chinese_names(pages, cache=None, refresh=False, chunk=50):
     for start in range(0, len(missing), chunk):
         batch = missing[start:start + chunk]
         log(f"  解析成员页 {min(start + chunk, len(missing))}/{len(missing)} ...")
-        data = wiki_api({
-            "action": "query", "titles": "|".join(batch),
-            "prop": "revisions", "rvprop": "content", "rvslots": "main",
-        })
+        try:
+            data = wiki_api({
+                "action": "query", "titles": "|".join(batch),
+                "prop": "revisions", "rvprop": "content", "rvslots": "main",
+            })
+        except Exception as exc:
+            record_failure(f"批量解析 {len(batch)} 个成员页", exc)
+            continue
         for item in data.get("query", {}).get("pages", []):
             title = item.get("title", "")
             revisions = item.get("revisions") or []
