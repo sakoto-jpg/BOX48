@@ -45,7 +45,7 @@ groups:
     api_gid: 5
     bilibili_mid: 174377185       # CKG48官方账号
     enabled: true                 # 2026-10-01 开启排期与花名册
-    sync_uploads: false           # 投稿抓取等 GNZ 全量跑完后再开
+    sync_uploads: true            # 2026-10-02 开启投稿抓取（BEJ 已跑完）
     member_sources: ["CKG48 Members", "CKG48 Graduates", "CKG48 Trainees"]
   - code: cgt
     name: CGT48
