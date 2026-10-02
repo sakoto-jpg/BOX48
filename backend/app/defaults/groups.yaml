@@ -37,7 +37,7 @@ groups:
     api_gid: 2
     bilibili_mid: 26849519        # BEJ48 官方账号
     enabled: true                 # 2026-10-01 开启排期与花名册
-    sync_uploads: false           # 投稿抓取等 GNZ 全量跑完后再开
+    sync_uploads: true            # 2026-10-02 开启投稿抓取（GNZ 已跑完）
     member_sources: ["BEJ48 Members", "BEJ48 Graduates", "BEJ48 Trainees"]
   - code: ckg
     name: CKG48
