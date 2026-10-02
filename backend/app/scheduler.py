@@ -91,19 +91,32 @@ class Snh48Scanner:
     def _match_team(self, title: str, include_disabled: bool = False) -> str:
         """匹配标题所属队伍。
         include_disabled=True 时也匹配未开启自动入库的队伍（手动入库场景），
-        False 时仅匹配已启用队伍（自动入库/自动洗版场景）。"""
+        False 时仅匹配已启用队伍（自动入库/自动洗版场景）。
+
+        规则：大小写不敏感 + 取「最长命中」的关键词。
+        - 大小写不敏感：各分团官号的标题写法不统一（`Team NII` / `TEAM NII`），
+          官方巡场投稿常写成 `Team NII`，旧规则会整条漏匹配 → 判为不符合入库规则
+        - 最长命中：避免 `TEAM NII` 吞掉 `TEAM NIII`、`TEAM C` 吞掉 `TEAM CII`
+        """
         roster = self.nfo_builder.roster
         if include_disabled:
             roster = self.nfo_builder._load_roster(self.config_path, enabled_only=False)
-        for team_name, team_data in roster.items():
+        upper_title = (title or "").upper()
+        squeezed_title = upper_title.replace(" ", "")
+        best = None   # ((关键词长度, -配置顺序), 队伍名)
+        for index, (team_name, team_data) in enumerate(roster.items()):
             keywords = team_data.get("keywords", [])
             for kw in keywords:
-                if kw.upper() == "NII" and "NIII" in title.upper():
-                    if "NII" not in title.upper().replace("NIII", ""):
-                        continue 
-                if kw in title or kw.replace(" ", "") in title.replace(" ", ""):
-                    return team_name
-        return None
+                kw_upper = str(kw).upper()
+                # 标题里出现 NIII 时，不要用 NII 结尾的关键词去匹配
+                if "NIII" in upper_title and kw_upper.endswith("NII"):
+                    continue
+                if (kw_upper in upper_title
+                        or kw_upper.replace(" ", "") in squeezed_title):
+                    score = (len(kw_upper), -index)
+                    if best is None or score > best[0]:
+                        best = (score, team_name)
+        return best[1] if best else None
 
     # 编码策略固定为：AV1 > H.265(HEVC) > H.264(AVC)
     CODEC_PRIORITY = ('av01', 'hevc', 'avc')
