@@ -313,9 +313,17 @@ def people_dir(metadata_root, name):
 
 
 def to_host_path(path, library_root):
-    """数据库里存的是下载器容器路径 /downloads/…，宿主机上对应媒体库根目录。"""
+    """数据库里存的是下载器容器路径 /downloads/…，本地对应媒体库根目录。"""
     if path.startswith("/downloads"):
         return library_root + path[len("/downloads"):]
+    return path
+
+
+def to_local_path(path, args):
+    """Emby 报的是宿主机路径，容器内跑时要换算成本地路径。"""
+    root = args.emby_path_root or args.library_root
+    if root and path.startswith(root):
+        return args.library_root + path[len(root):]
     return path
 
 
@@ -386,7 +394,7 @@ def step_episodes(args, emby):
     ).fetchall()
     conn.close()
 
-    episodes = {os.path.realpath(item.get("Path", "")): item
+    episodes = {os.path.realpath(to_local_path(item.get("Path", ""), args)): item
                 for item in emby.items(args.emby_library_id, "Episode")}
     log(f"下载记录 {len(rows)} 条，Emby 剧集 {len(episodes)} 个")
 
@@ -519,16 +527,32 @@ def main():
     parser = argparse.ArgumentParser(description="Emby 素材工具")
     parser.add_argument("--only", choices=["people", "episodes", "teams", "refresh", "all"],
                         default="all")
-    parser.add_argument("--library-root", default="/mnt/nas/anime/video/live48")
-    parser.add_argument("--db", default="/root/snh48-downloader/config/snh48.db")
-    parser.add_argument("--config", default="/root/snh48-downloader/config/roster.yaml")
-    parser.add_argument("--emby-metadata", default="/root/emby-config/metadata")
+    # 默认值优先取环境变量，这样同一份代码在宿主机和容器里都能直接跑：
+    #   宿主机：python3 tools/emby_artwork.py           （用下面的默认值）
+    #   容器内：docker exec ... python tools/emby_artwork.py
+    #           （DOWNLOADS_PATH/CONFIG_PATH 等由 compose 注入）
+    parser.add_argument("--library-root",
+                        default=os.environ.get("LIBRARY_ROOT")
+                        or os.environ.get("DOWNLOAD_PATH", "/mnt/nas/anime/video/live48"))
+    parser.add_argument("--config",
+                        default=os.environ.get("CONFIG_PATH",
+                                               "/root/snh48-downloader/config/roster.yaml"))
+    parser.add_argument("--db", default=os.environ.get("DB_PATH", ""))
+    parser.add_argument("--emby-metadata",
+                        default=os.environ.get("EMBY_METADATA_PATH",
+                                               "/root/emby-config/metadata"))
+    parser.add_argument("--emby-path-root",
+                        default=os.environ.get("EMBY_PATH_ROOT", ""),
+                        help="Emby 上报的媒体库根路径（容器里跑时填宿主机路径）")
     parser.add_argument("--emby-url", default="")
     parser.add_argument("--emby-token", default="")
     parser.add_argument("--limit", type=int, default=0, help="限制处理数量(测试用)")
     parser.add_argument("--apply", action="store_true", help="写入并刷新 Emby")
     parser.add_argument("--force-people", action="store_true", help="成员头像全部重新抓取")
     args = parser.parse_args()
+
+    if not args.db:
+        args.db = os.path.join(os.path.dirname(args.config), "snh48.db")
 
     server_url, api_key, library_name = parse_emby_config(args.config)
     emby_url = args.emby_url or server_url or "http://192.168.1.12:8096"

@@ -124,7 +124,10 @@
 2. **长任务**（投稿全量 ≈ 数小时）必须后台跑 + 轮询日志，不能阻塞 HTTP 请求。
 3. **`emby_artwork.py` 依赖宿主机路径**（`/root/emby-config/metadata` 没挂进容器）。
    两条路：给后端容器加挂载（改 compose），或者在设置页只提供「复制命令」。
-   建议先加挂载（`- /root/emby-config:/emby-config`），这样工具也能一键跑。
+   **✅ 2026-10-04 已加挂载**：compose 增加 `- /root/emby-config:/emby-config`，
+   并注入 `EMBY_METADATA_PATH` / `EMBY_PATH_ROOT`；素材工具改为从环境变量取路径，
+   同一份代码在宿主机与容器里都能直接跑（容器里实测：剧集封面 84/84 匹配、
+   队伍素材、人物头像目录均可读写）。
 4. **改 `groups.yaml` 要原子写**（临时文件 + rename），否则正在跑的同步任务
    会读到半截内容（GNZ 首轮抓取就是这么中断过一次）。
 5. **crontab 改动**要备份并在 UI 上明确显示改了什么。

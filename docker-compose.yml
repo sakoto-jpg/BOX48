@@ -12,11 +12,14 @@ services:
       - ./config:/config
       - ./cookie:/cookie
       - /mnt/nas/anime/video/live48:/downloads
+      - /root/emby-config:/emby-config   # Emby 元数据目录（人物头像/剧集封面写入）
     environment:
       - TZ=Asia/Shanghai
       - CONFIG_PATH=/config/roster.yaml
       - COOKIE_PATH=/cookie/cookies.txt
       - DOWNLOAD_PATH=/downloads
+      - EMBY_METADATA_PATH=/emby-config/metadata
+      - EMBY_PATH_ROOT=/mnt/nas/anime/video/live48   # Emby 上报的宿主路径
 
   # ---------- 新增前端服务 ----------
   snh48-frontend:
