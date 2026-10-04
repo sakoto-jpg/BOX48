@@ -1,10 +1,13 @@
 import os
 import re
+import glob
+import shutil
 import threading
 import yaml
 import requests
 import datetime
 import group_config
+from emby_client import EmbyClient
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -333,6 +336,170 @@ def reload_metadata():
         "teams": len(scanner.nfo_builder.roster),
         "performances": len(scanner.nfo_builder.performances),
     }
+
+
+# ── 设置页（阶段 5a）：通知 / Emby / 分团账号 ─────────────────────────
+GROUPS_CONFIG_PATH = group_config.RUNTIME_PATH
+GROUPS_BACKUP_DIR = os.path.join(os.path.dirname(GROUPS_CONFIG_PATH), "backups")
+GROUPS_EDITABLE = ("bilibili_mid", "enabled", "sync_uploads", "theme_color")
+
+
+def _backup_file(path: str, keep: int = 10):
+    """按时间戳备份文件，只保留最近 keep 份。"""
+    if not os.path.exists(path):
+        return
+    os.makedirs(GROUPS_BACKUP_DIR, exist_ok=True)
+    stamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    shutil.copy2(path, os.path.join(GROUPS_BACKUP_DIR, f"{os.path.basename(path)}.{stamp}.bak"))
+    history = sorted(glob.glob(os.path.join(GROUPS_BACKUP_DIR,
+                                            f"{os.path.basename(path)}.*.bak")))
+    for stale in history[:-keep]:
+        os.remove(stale)
+
+
+def _atomic_write_yaml(path: str, data: dict):
+    """原子写 YAML：先写临时文件再 rename，避免正在跑的同步任务读到半截内容。
+
+    yaml.dump 不保留注释，这里把原文件开头的说明注释块原样带回去。
+    """
+    header = []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                if line.startswith("#") or not line.strip():
+                    header.append(line.rstrip("\n"))
+                else:
+                    break
+    except OSError:
+        header = []
+    while header and not header[-1].strip():
+        header.pop()
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        if header:
+            fh.write("\n".join(header) + "\n")
+        yaml.dump(data, fh, allow_unicode=True, sort_keys=False)
+    os.replace(tmp, path)
+
+
+@app.post("/api/notify_test")
+def notify_test(payload: dict = None):
+    """发送一条测试推送，验证 Apprise 地址是否可用。"""
+    url = ((payload or {}).get("apprise_url") or "").strip() \
+        or (get_current_config().get("apprise_url") or "").strip()
+    if not url:
+        return {"ok": False, "message": "请先填写推送地址"}
+    try:
+        resp = requests.post(
+            url,
+            json={
+                "title": "[SNH48-DownLoader] 测试推送",
+                "body": "如果你看到这条消息，说明推送地址配置正确。\n"
+                        "公演开播提醒与口袋48开播提醒都会发到这里。",
+                "type": "info",
+            },
+            timeout=10,
+        )
+        if resp.status_code < 400:
+            return {"ok": True, "message": f"已发送（HTTP {resp.status_code}）"}
+        return {"ok": False, "message": f"HTTP {resp.status_code}: {resp.text[:120]}"}
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)[:200]}
+
+
+@app.post("/api/emby_test")
+def emby_test(payload: dict = None):
+    """测试 Emby 服务器地址 / API Key / 媒体库名称是否可用。"""
+    data = payload or {}
+    saved = get_current_config().get("emby") or {}
+    url = (data.get("server_url") or saved.get("server_url") or "").strip().rstrip("/")
+    key = (data.get("api_key") or saved.get("api_key") or "").strip()
+    name = (data.get("library_name") or saved.get("library_name") or "").strip()
+    if not url or not key:
+        return {"ok": False, "message": "请先填写服务器地址与 API Key"}
+    try:
+        client = EmbyClient(url, key, name)
+        library_id = client.library_id
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)[:200]}
+    if not library_id:
+        return {"ok": False, "message": f"能连上服务器，但没找到媒体库「{name}」"}
+    return {"ok": True, "message": f"已连接，媒体库 ID {library_id}"}
+
+
+@app.get("/api/groups/config")
+def get_groups_config():
+    """分团配置中可在前端编辑的字段（api_gid / trainee / wiki 分类仍由文件维护）。"""
+    config = group_config.load()
+    return {
+        "path": GROUPS_CONFIG_PATH,
+        "groups": [
+            {
+                "code": group.get("code"),
+                "name": group.get("name"),
+                "api_gid": group.get("api_gid"),
+                "theme_color": group.get("theme_color") or "#64748b",
+                "bilibili_mid": group.get("bilibili_mid"),
+                "enabled": bool(group.get("enabled")),
+                "sync_uploads": group.get("sync_uploads", True),
+            }
+            for group in config.get("groups", [])
+        ],
+    }
+
+
+@app.post("/api/groups/config")
+def save_groups_config(payload: dict):
+    """保存分团账号与开关：原子写 groups.yaml，写前自动备份。"""
+    updates = {
+        str(item.get("code")): item
+        for item in (payload or {}).get("groups", [])
+        if item.get("code")
+    }
+    if not updates:
+        return {"ok": False, "message": "没有需要更新的分团"}
+    if not os.path.exists(GROUPS_CONFIG_PATH):
+        return {"ok": False, "message": f"配置文件不存在: {GROUPS_CONFIG_PATH}"}
+
+    with open(GROUPS_CONFIG_PATH, encoding="utf-8") as fh:
+        config = yaml.safe_load(fh) or {}
+
+    changed = []
+    for group in config.get("groups", []):
+        item = updates.get(str(group.get("code")))
+        if not item:
+            continue
+        for key in GROUPS_EDITABLE:
+            if key not in item:
+                continue
+            value = item[key]
+            if key == "bilibili_mid":
+                value = int(value) if str(value).strip().isdigit() else None
+            elif key in ("enabled", "sync_uploads"):
+                value = bool(value)
+            # 与 GET 保持同一套默认值，避免「原样回写」被误判为有变化
+            default = {"sync_uploads": True, "enabled": False,
+                       "theme_color": "#64748b"}.get(key)
+            if group.get(key, default) != value:
+                group[key] = value
+                changed.append(f"{group.get('code')}.{key}")
+
+    if not changed:
+        return {"ok": True, "message": "没有变化", "changed": []}
+
+    _backup_file(GROUPS_CONFIG_PATH)
+    _atomic_write_yaml(GROUPS_CONFIG_PATH, config)
+    print(f"⚙️ 分团配置已更新: {'、'.join(changed)}", flush=True)
+
+    restart_needed = any(item.endswith(".enabled") for item in changed)
+    return {
+        "ok": True,
+        "message": f"已更新 {len(changed)} 项",
+        "changed": changed,
+        "restart_calendar": restart_needed,
+        "note": "改「接入」后需重启日历服务才会立即抓取排期；改「投稿抓取」在下次定时同步生效。",
+    }
+
 
 @app.get("/api/history")
 def get_history(group_code: str = ""):

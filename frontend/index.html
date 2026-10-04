@@ -525,6 +525,102 @@
                     </div>
                     <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
                 </div>
+
+                <!-- 通知推送 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">通知推送</h2>
+                    </div>
+                    <label class="text-sm font-medium text-slate-600 block mb-2">Apprise 推送地址</label>
+                    <div class="flex gap-2">
+                        <input v-model="config.apprise_url" placeholder="http://192.168.1.12:8800/notify/apprise"
+                               class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rose-400 outline-none">
+                        <button @click="testNotify" :disabled="testingNotify"
+                                class="bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
+                            {{ testingNotify ? '发送中...' : '发送测试推送' }}
+                        </button>
+                    </div>
+                    <p class="text-xs mt-2" :class="notifyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
+                        {{ notifyTestMsg || '公演开播提醒、口袋48开播提醒都发到这里；改完记得点右上角「保存并应用配置」。' }}
+                    </p>
+                </div>
+
+                <!-- Emby -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">Emby 媒体库</h2>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-500 mb-1 block">服务器地址</label>
+                            <input v-model="config.emby.server_url" placeholder="http://192.168.1.12:8096"
+                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-500 mb-1 block">媒体库名称</label>
+                            <input v-model="config.emby.library_name" placeholder="SNH48公演直播回放"
+                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-400 outline-none">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
+                        <div class="flex gap-2">
+                            <input :type="showEmbyKey ? 'text' : 'password'" v-model="config.emby.api_key"
+                                   placeholder="Emby → 设置 → API 密钥"
+                                   class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
+                            <button @click="showEmbyKey = !showEmbyKey"
+                                    class="px-3 rounded-lg text-xs text-slate-500 border border-slate-200 hover:bg-slate-50 shrink-0">
+                                {{ showEmbyKey ? '隐藏' : '显示' }}
+                            </button>
+                            <button @click="testEmby" :disabled="testingEmby"
+                                    class="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
+                                {{ testingEmby ? '测试中...' : '测试连接' }}
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-xs mt-2" :class="embyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
+                        {{ embyTestMsg || '下载入库后用它刷新媒体库；改完记得点右上角「保存并应用配置」。' }}
+                    </p>
+                </div>
+
+                <!-- 分团官方账号与开关 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"></path></svg>
+                            <h2 class="text-lg font-bold text-slate-800">分团官方账号与开关</h2>
+                        </div>
+                        <button @click="saveGroupConfig" :disabled="savingGroups"
+                                class="bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-xl text-sm transition">
+                            {{ savingGroups ? '保存中...' : '保存分团配置' }}
+                        </button>
+                    </div>
+                    <div class="space-y-2">
+                        <div v-for="g in groupConfigs" :key="'cfg-' + g.code"
+                             class="flex flex-wrap items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <span class="w-24 shrink-0 font-semibold text-sm" :style="{ color: g.theme_color }">{{ g.name }}</span>
+                            <label class="flex items-center gap-1 text-xs text-slate-600 shrink-0 cursor-pointer" title="接入该分团的排期 / 花名册 / 前端标签页">
+                                <input type="checkbox" v-model="g.enabled" class="rounded"> 接入
+                            </label>
+                            <label class="flex items-center gap-1 text-xs text-slate-600 shrink-0 cursor-pointer" title="是否抓取该分团官方账号的投稿目录">
+                                <input type="checkbox" v-model="g.sync_uploads" class="rounded"> 投稿抓取
+                            </label>
+                            <input v-model="g.bilibili_mid" placeholder="B站 mid"
+                                   class="w-36 px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-mono focus:ring-2 focus:ring-violet-300 outline-none">
+                            <span class="text-xs text-slate-400">gid {{ g.api_gid }}</span>
+                            <input type="color" v-model="g.theme_color"
+                                   class="w-9 h-8 rounded border border-slate-200 bg-white p-0.5 cursor-pointer">
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-3">
+                        取消「接入」或改「B站 mid」后，需要重启日历服务
+                        <span class="font-mono bg-slate-100 px-1 rounded">docker compose up -d snh48-calendar</span>
+                        才会立即抓取排期；「投稿抓取」在下次定时同步（每 6 小时）生效。
+                        训练生规则、wiki 分类映射等结构性配置仍在 <span class="font-mono">groups.yaml</span> 里维护。
+                    </p>
+                </div>
                 </div>
             </div>
         </div>
@@ -1009,6 +1105,75 @@
                     finally { isSavingConfig.value = false; }
                 };
 
+                // ── 设置页（5a）：通知 / Emby / 分团账号 ──────────────
+                const groupConfigs = ref([]);
+                const testingNotify = ref(false);
+                const testingEmby = ref(false);
+                const savingGroups = ref(false);
+                const showEmbyKey = ref(false);
+                const notifyTestMsg = ref("");
+                const embyTestMsg = ref("");
+
+                const fetchGroupConfigs = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/groups/config`);
+                        const data = await res.json();
+                        groupConfigs.value = data.groups || [];
+                    } catch (e) { console.error('加载分团配置失败', e); }
+                };
+
+                const testNotify = async () => {
+                    testingNotify.value = true;
+                    notifyTestMsg.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/notify_test`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ apprise_url: config.value.apprise_url || '' })
+                        });
+                        const data = await res.json();
+                        notifyTestMsg.value = (data.ok ? '✅ ' : '❌ ') + data.message;
+                    } catch (e) {
+                        notifyTestMsg.value = '❌ 请求失败';
+                    } finally { testingNotify.value = false; }
+                };
+
+                const testEmby = async () => {
+                    testingEmby.value = true;
+                    embyTestMsg.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/emby_test`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(config.value.emby || {})
+                        });
+                        const data = await res.json();
+                        embyTestMsg.value = (data.ok ? '✅ ' : '❌ ') + data.message;
+                    } catch (e) {
+                        embyTestMsg.value = '❌ 请求失败';
+                    } finally { testingEmby.value = false; }
+                };
+
+                const saveGroupConfig = async () => {
+                    savingGroups.value = true;
+                    try {
+                        const res = await fetch(`${API_BASE}/groups/config`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ groups: groupConfigs.value })
+                        });
+                        const data = await res.json();
+                        const detail = (data.changed && data.changed.length)
+                            ? '\n改动：' + data.changed.join('、') : '';
+                        alert((data.ok ? '✅ ' : '❌ ') + data.message + detail
+                              + (data.restart_calendar ? '\n\n提示：' + data.note : ''));
+                        await loadGroups();
+                        await fetchGroupConfigs();
+                    } catch (e) {
+                        alert('❌ 保存失败');
+                    } finally { savingGroups.value = false; }
+                };
+
                 // 🚀 处理特殊公演的手动订阅
                 const toggleManualSub = async (id) => {
                     if (!config.value.manual_subs) config.value.manual_subs = [];
@@ -1080,6 +1245,7 @@
 
                 onMounted(() => {
                     loadGroups();
+                    fetchGroupConfigs();
                     fetchDownloadQueue();
                     fetchConfig();
                     fetchSchedules();
@@ -1133,7 +1299,9 @@
                     uploadRepair, runRepairAction,
                     searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,
                     groups, activeTab, isSavingConfig, selectTab, loadGroups,
-                    activeGroupCode, activeGroup, activeGroupTeams
+                    activeGroupCode, activeGroup, activeGroupTeams,
+                    groupConfigs, testingNotify, testingEmby, savingGroups, showEmbyKey,
+                    notifyTestMsg, embyTestMsg, fetchGroupConfigs, testNotify, testEmby, saveGroupConfig
                 };
             }
         });
