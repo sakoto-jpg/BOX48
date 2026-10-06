@@ -32,6 +32,7 @@ services:
       - "8090:80"   # 使用 8090 端口访问网页端面板
     volumes:
       - ./frontend:/usr/share/nginx/html:ro  # 挂载前端代码目录
+      - ./frontend/nginx.conf:/etc/nginx/conf.d/default.conf:ro  # 入口页禁用强缓存
 
   # ---------- 公演排期服务(由 snh48-calendar 合并而来) ----------
   snh48-calendar:
