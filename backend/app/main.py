@@ -7,6 +7,7 @@ import yaml
 import requests
 import datetime
 import group_config
+import maintenance
 from emby_client import EmbyClient
 from fastapi import FastAPI, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -499,6 +500,52 @@ def save_groups_config(payload: dict):
         "restart_calendar": restart_needed,
         "note": "改「接入」后需重启日历服务才会立即抓取排期；改「投稿抓取」在下次定时同步生效。",
     }
+
+
+# ── 维护任务（阶段 5b）：把 tools/ 下的脚本做成前端按钮 ──────────────
+@app.get("/api/maintenance/actions")
+def maintenance_actions():
+    """可用于前端的维护动作清单（含是否破坏性、支持哪些参数）。"""
+    return [
+        {
+            "action": key,
+            "label": spec["label"],
+            "desc": spec["desc"],
+            "destructive": spec["destructive"],
+            "params": sorted(spec["params"].keys()),
+        }
+        for key, spec in maintenance.ACTIONS.items()
+    ]
+
+
+@app.post("/api/maintenance/run")
+def maintenance_run(payload: dict = None):
+    """启动维护任务。destructive 动作要 apply=true 才会真正写入。"""
+    data = payload or {}
+    action = str(data.get("action") or "")
+    try:
+        task_id = maintenance.start(action, data.get("params") or {},
+                                    bool(data.get("apply")))
+    except ValueError as exc:
+        return {"ok": False, "message": str(exc)}
+    except RuntimeError as exc:
+        return {"ok": False, "message": str(exc)}
+    task = maintenance.describe(task_id)
+    return {"ok": True, "task_id": task_id, "task": task,
+            "message": f"已启动：{task['label']}（{task['mode']}）"}
+
+
+@app.get("/api/maintenance/tasks")
+def maintenance_tasks(limit: int = 10):
+    return {"busy": maintenance.is_busy(), "tasks": maintenance.recent(limit)}
+
+
+@app.get("/api/maintenance/log/{task_id}")
+def maintenance_log(task_id: str, tail: int = 6000):
+    task = maintenance.describe(task_id)
+    if not task:
+        return {"ok": False, "message": "任务不存在或已过期"}
+    return {"ok": True, "task": task, "log": maintenance.read_log(task_id, tail)}
 
 
 @app.get("/api/history")

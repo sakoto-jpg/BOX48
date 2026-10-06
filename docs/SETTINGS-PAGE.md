@@ -95,6 +95,25 @@
 
 ### 5b 维护工具面板
 
+**状态：✅ 已完成（2026-10-06）**
+
+已落地：`backend/app/maintenance.py` 维护任务模块 + `/api/maintenance/*` 接口
++ 设置页「维护工具」卡片。实测：参数校验、并发锁、预览、日志轮询、确认闸门全部正常。
+
+动作白名单（`维护工具` 卡片里的五个按钮）：
+
+| action | 按钮 | 破坏性 | 参数 |
+|---|---|---|---|
+| `sync_uploads` | 同步投稿目录 | 否（直接执行） | 分团 / 模式 / 条数 |
+| `sync_wiki` | 同步 wiki 数据 | 是（先预览） | 包含未启用分团 |
+| `rewrite_metadata` | 重建剧集演职人员 | 是（先预览） | 队伍 / BV / 条数 |
+| `repair_chapters` | 修复章节标题 | 是（先预览） | — |
+| `emby_artwork` | 刷新 Emby 素材 | 否（直接执行） | 范围 / 条数 |
+
+接口：`GET /api/maintenance/actions`、`POST /api/maintenance/run`、
+`GET /api/maintenance/tasks`、`GET /api/maintenance/log/{task_id}`。
+任务后台运行、日志落 `/config/logs/maintenance/<task_id>.log`，同一时间只允许一个任务。
+
 新增 `POST /api/maintenance/{action}`，action 白名单：
 
 | action | 对应工具 | 是否破坏性 |
