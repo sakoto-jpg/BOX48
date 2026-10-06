@@ -106,7 +106,7 @@
         <!-- 分团面板：所有已启用分团共用，数据按 activeGroupCode 取 -->
         <div data-panel="group" v-show="activeGroup && activeGroup.enabled">
             <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                <div class="xl:col-span-4 space-y-6">
+                <div class="xl:col-span-4 space-y-6 xl:sticky xl:top-6 xl:self-start">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
@@ -287,6 +287,9 @@
                         </div>
                     </div>
                 </div>
+                </div>
+            </div>
+            <div class="mt-8">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-2">
@@ -355,25 +358,22 @@
                         </transition-group>
                     </div>
                 </div>
-                </div>
             </div>
         </div>
         <div data-panel="queue" v-show="activeTab === 'queue'">
-            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                <div class="xl:col-span-4 space-y-6">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">任务引擎</h2>
+            <div class="space-y-8">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 px-6 py-4">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <svg class="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <h2 class="text-lg font-bold text-slate-800">任务引擎</h2>
+                            <span class="text-xs text-slate-400 ml-1">{{ scanMessage }}</span>
+                        </div>
+                        <button @click="triggerScan" :disabled="isScanning" class="bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-2.5 px-6 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
+                            {{ isScanning ? '巡视指令已发送...' : '立即扫描录播更新' }}
+                        </button>
                     </div>
-
-                    <button @click="triggerScan" :disabled="isScanning" class="w-full relative bg-pink-500 hover:bg-pink-600 disabled:bg-slate-300 text-white font-bold py-3.5 px-4 rounded-xl transition-all duration-300 transform active:scale-[0.98]">
-                        <span class="relative z-10">{{ isScanning ? '巡视指令已发送...' : '立即扫描录播更新' }}</span>
-                    </button>
-                    <p class="text-xs text-slate-400 mt-3 text-center">{{ scanMessage }}</p>
                 </div>
-                </div>
-                <div class="xl:col-span-8 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col h-[500px]">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -425,7 +425,6 @@
                         <div v-if="Object.keys(activeTasks).length === 0 && downloadQueue.length === 0"
                              class="h-full flex items-center justify-center text-slate-400 text-sm">当前没有下载任务</div>
                     </div>
-                </div>
                 </div>
             </div>
         </div>
@@ -507,84 +506,6 @@
                     <!-- 状态 -->
                     <p class="text-xs text-slate-400 text-center pt-2 border-t border-slate-50">{{ schedulerStatus }}</p>
                 </div>
-                </div>
-                <div class="xl:col-span-8 space-y-6">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-6">
-                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        <h3 class="text-lg font-bold text-slate-800">监听账号 (B站主页)</h3>
-                    </div>
-                    <div class="space-y-3">
-                        <transition-group name="list">
-                            <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
-                                <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
-                                <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
-                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
-                            </div>
-                        </transition-group>
-                    </div>
-                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
-                </div>
-
-                <!-- 通知推送 -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">通知推送</h2>
-                    </div>
-                    <label class="text-sm font-medium text-slate-600 block mb-2">Apprise 推送地址</label>
-                    <div class="flex gap-2">
-                        <input v-model="config.apprise_url" placeholder="http://192.168.1.12:8800/notify/apprise"
-                               class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rose-400 outline-none">
-                        <button @click="testNotify" :disabled="testingNotify"
-                                class="bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
-                            {{ testingNotify ? '发送中...' : '发送测试推送' }}
-                        </button>
-                    </div>
-                    <p class="text-xs mt-2" :class="notifyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
-                        {{ notifyTestMsg || '公演开播提醒、口袋48开播提醒都发到这里；改完记得点右上角「保存并应用配置」。' }}
-                    </p>
-                </div>
-
-                <!-- Emby -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
-                    <div class="flex items-center gap-2 mb-4">
-                        <svg class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
-                        <h2 class="text-lg font-bold text-slate-800">Emby 媒体库</h2>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                            <label class="text-xs font-semibold text-slate-500 mb-1 block">服务器地址</label>
-                            <input v-model="config.emby.server_url" placeholder="http://192.168.1.12:8096"
-                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
-                        </div>
-                        <div>
-                            <label class="text-xs font-semibold text-slate-500 mb-1 block">媒体库名称</label>
-                            <input v-model="config.emby.library_name" placeholder="SNH48公演直播回放"
-                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-400 outline-none">
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <label class="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
-                        <div class="flex gap-2">
-                            <input :type="showEmbyKey ? 'text' : 'password'" v-model="config.emby.api_key"
-                                   placeholder="Emby → 设置 → API 密钥"
-                                   class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
-                            <button @click="showEmbyKey = !showEmbyKey"
-                                    class="px-3 rounded-lg text-xs text-slate-500 border border-slate-200 hover:bg-slate-50 shrink-0">
-                                {{ showEmbyKey ? '隐藏' : '显示' }}
-                            </button>
-                            <button @click="testEmby" :disabled="testingEmby"
-                                    class="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
-                                {{ testingEmby ? '测试中...' : '测试连接' }}
-                            </button>
-                        </div>
-                    </div>
-                    <p class="text-xs mt-2" :class="embyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
-                        {{ embyTestMsg || '下载入库后用它刷新媒体库；改完记得点右上角「保存并应用配置」。' }}
-                    </p>
-                </div>
-
                 <!-- 投稿列表刷新策略 -->
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-4">
@@ -678,6 +599,84 @@
                     <p class="text-xs text-slate-400 mt-2">
                         日历服务抓取官方票务接口（当月 + 下月）的缓存时长，可填 1–168 小时。
                         调小能让新排期更快出现，默认 6 小时；保存配置后自动生效，无需重启容器。
+                    </p>
+                </div>
+
+                </div>
+                <div class="xl:col-span-8 space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-6">
+                        <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                        <h3 class="text-lg font-bold text-slate-800">监听账号 (B站主页)</h3>
+                    </div>
+                    <div class="space-y-3">
+                        <transition-group name="list">
+                            <div v-for="(sub, index) in config.subscriptions" :key="'sub'+index" class="flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                                <input v-model="sub.name" placeholder="标识名" class="w-1/4 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-400 outline-none">
+                                <input v-model="sub.url" placeholder="B站 Space URL" class="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-400 outline-none">
+                                <button @click="removeSub(index)" class="text-red-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        </transition-group>
+                    </div>
+                    <button @click="addSub" class="mt-4 flex items-center gap-1 text-sm text-indigo-500 font-semibold hover:text-indigo-700 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg> 添加监听账号</button>
+                </div>
+
+                <!-- 通知推送 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">通知推送</h2>
+                    </div>
+                    <label class="text-sm font-medium text-slate-600 block mb-2">Apprise 推送地址</label>
+                    <div class="flex gap-2">
+                        <input v-model="config.apprise_url" placeholder="http://192.168.1.12:8800/notify/apprise"
+                               class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-rose-400 outline-none">
+                        <button @click="testNotify" :disabled="testingNotify"
+                                class="bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
+                            {{ testingNotify ? '发送中...' : '发送测试推送' }}
+                        </button>
+                    </div>
+                    <p class="text-xs mt-2" :class="notifyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
+                        {{ notifyTestMsg || '公演开播提醒、口袋48开播提醒都发到这里；改完记得点右上角「保存并应用配置」。' }}
+                    </p>
+                </div>
+
+                <!-- Emby -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center gap-2 mb-4">
+                        <svg class="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">Emby 媒体库</h2>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-500 mb-1 block">服务器地址</label>
+                            <input v-model="config.emby.server_url" placeholder="http://192.168.1.12:8096"
+                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-500 mb-1 block">媒体库名称</label>
+                            <input v-model="config.emby.library_name" placeholder="SNH48公演直播回放"
+                                   class="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-sky-400 outline-none">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <label class="text-xs font-semibold text-slate-500 mb-1 block">API Key</label>
+                        <div class="flex gap-2">
+                            <input :type="showEmbyKey ? 'text' : 'password'" v-model="config.emby.api_key"
+                                   placeholder="Emby → 设置 → API 密钥"
+                                   class="flex-1 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-sky-400 outline-none">
+                            <button @click="showEmbyKey = !showEmbyKey"
+                                    class="px-3 rounded-lg text-xs text-slate-500 border border-slate-200 hover:bg-slate-50 shrink-0">
+                                {{ showEmbyKey ? '隐藏' : '显示' }}
+                            </button>
+                            <button @click="testEmby" :disabled="testingEmby"
+                                    class="bg-sky-500 hover:bg-sky-600 disabled:bg-slate-300 text-white font-semibold px-4 rounded-lg text-sm transition shrink-0">
+                                {{ testingEmby ? '测试中...' : '测试连接' }}
+                            </button>
+                        </div>
+                    </div>
+                    <p class="text-xs mt-2" :class="embyTestMsg.startsWith('❌') ? 'text-red-500' : 'text-slate-400'">
+                        {{ embyTestMsg || '下载入库后用它刷新媒体库；改完记得点右上角「保存并应用配置」。' }}
                     </p>
                 </div>
 
