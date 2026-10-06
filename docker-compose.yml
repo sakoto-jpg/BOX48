@@ -13,6 +13,7 @@ services:
       - ./cookie:/cookie
       - /mnt/nas/anime/video/live48:/downloads
       - /root/emby-config:/emby-config   # Emby 元数据目录（人物头像/剧集封面写入）
+      - /var/spool/cron/crontabs:/host-crontabs   # 宿主机 crontab（设置页可改刷新策略）
     environment:
       - TZ=Asia/Shanghai
       - CONFIG_PATH=/config/roster.yaml
@@ -20,6 +21,7 @@ services:
       - DOWNLOAD_PATH=/downloads
       - EMBY_METADATA_PATH=/emby-config/metadata
       - EMBY_PATH_ROOT=/mnt/nas/anime/video/live48   # Emby 上报的宿主路径
+      - CRONTAB_PATH=/host-crontabs/root             # 定时任务文件（原地写，权限不变）
 
   # ---------- 新增前端服务 ----------
   snh48-frontend:

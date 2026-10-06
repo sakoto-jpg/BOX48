@@ -7,6 +7,7 @@ import yaml
 import requests
 import datetime
 import group_config
+import crond
 import maintenance
 from emby_client import EmbyClient
 from fastapi import FastAPI, BackgroundTasks
@@ -326,7 +327,27 @@ def save_config(config: dict):
     scanner.nfo_builder.reload_config()
     scanner.reload_emby_client()
     reschedule_scan_job()
-    return {"message": "配置已保存并生效"}
+    # 投稿抓取的定时策略写在 crontab 里，保存配置时一并同步
+    cron_result = {"changed": False, "message": ""}
+    try:
+        cron_result = crond.apply(config.get("refresh") or {})
+    except Exception as exc:                     # noqa: BLE001
+        cron_result = {"ok": False, "message": f"定时任务更新失败: {exc}"}
+    message = "配置已保存并生效"
+    if cron_result.get("changed"):
+        message += "；定时任务已同步"
+    return {"message": message, "cron": cron_result}
+
+
+@app.get("/api/schedule/status")
+def schedule_status():
+    """定时任务当前状态：受管块内容 + 配置解析结果（供设置页展示）。"""
+    config = get_current_config()
+    status = crond.describe(config.get("refresh") or {})
+    status["wiki_line"] = next(
+        (line for line in (crond.read() or "").splitlines()
+         if "sync_wiki_all.py" in line), "")
+    return status
 
 @app.post("/api/reload_metadata")
 def reload_metadata():

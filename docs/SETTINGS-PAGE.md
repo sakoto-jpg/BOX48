@@ -10,7 +10,7 @@
 
 | # | 工具 | 作用 | 运行环境 | 现在的调用方式 | 前端可调用 |
 |---|---|---|---|---|---|
-| 1 | `sync_uploads.py` | 官方投稿目录同步（慢速可续爬） | 容器 | cron：每 6h 全量 + 每日 23:30 增量 | ❌ |
+| 1 | `sync_uploads.py` | 官方投稿目录同步（慢速可续爬） | 容器 | cron：可配置（默认每日 07:30 增量 + 每 6h 全量续抓） | ✅ 设置页 |
 | 2 | `sync_wiki_all.py` | wiki 一键同步（花名册→任职区间→剧目名单） | 容器 | cron：每周一 04:30 | ❌ |
 | 3 | `sync_roster_from_wiki.py` | 花名册同步（含 `--create-missing` 生成新队伍） | 容器 | 由 #2 串联 | ❌ |
 | 4 | `sync_member_terms_from_wiki.py` | 成员任职区间同步 | 容器 | 由 #2 串联 | ❌ |
@@ -35,6 +35,7 @@
 | `GET /api/groups` | ✅ 标签栏与分团筛选 |
 | `GET /api/uploads`、`/uploads/categories`、`/uploads/stats` | ✅ 投稿批量下载卡片 |
 | `GET /api/schedule_status` | ✅ 日历卡片状态 |
+| `GET /api/schedule/status` | ✅ 设置页 → 当前定时任务（5c 新增） |
 | `POST /api/download_batch` | ✅ 批量下载 / 洗版 |
 | `GET /api/download_queue` | ✅ 下载队列 |
 | `GET /api/emby_status` | ✅ 顶部状态点 |
@@ -62,6 +63,8 @@
 | **分团投稿抓取开关 `sync_uploads`** | ❌ | 同上 |
 | **分团主题色 `theme_color`** | ❌ | 同上 |
 | **分团训练生规则 `trainee`** | ❌ | 同上 |
+| **投稿列表刷新策略 `refresh.uploads`** | ✅ | 设置页 → 投稿列表刷新 |
+| **公演票务刷新间隔 `refresh.tickets.hours`** | ✅ | 设置页 → 公演票务刷新 |
 | 下载编码策略（AV1 → H.265 → H.264） | 设计上不可配置 | — |
 
 ## 四、改造方案
@@ -131,10 +134,43 @@
 - 破坏性操作前端默认 dry-run 预览，二次确认后才允许 `--apply`
 - 同时只允许一个维护任务运行（复用现有 `sync_uploads.lock` 思路）
 
-### 5c 定时任务可视化
+### 5c 定时任务与刷新策略可视化
 
-设置页显示四条 cron 的：状态、下次执行时间、最近一次日志尾部；
-「启用/停用」通过重写 crontab 实现（写前备份 `crontab -l`）。
+**状态：✅ 已完成（2026-10-06）**
+
+「投稿列表刷新」和「公演票务刷新」原先都是写死的周期，现已改为前端可配置。
+
+**投稿列表刷新**（写入 `roster.yaml` 的 `refresh.uploads`，保存配置时同步重写宿主机 crontab）：
+
+| 设置项 | 说明 |
+|---|---|
+| 启用 | 关闭后受管块写「已停用」，不再保留投稿抓取任务 |
+| 刷新模式 | `每日定时` / `间隔轮询` |
+| 每日刷新时刻 | 北京时间，可多选整点时刻 + 分钟（默认 07:30） |
+| 刷新间隔 | 间隔轮询模式下的小时数（1–23） |
+| 每次抓取最新条数 | 增量模式 `--latest N`（默认 10） |
+| 全量续抓间隔 | 全量断点续爬的间隔小时数（默认 6） |
+
+**公演票务刷新**（写入 `refresh.tickets.hours`）：日历服务抓取官方票务接口的缓存时长，
+1–168 小时，默认 6 小时。日历服务按 `roster.yaml` 的 mtime 自动重读，保存后即时生效，
+无需重启容器。
+
+实现要点：
+
+- 新增 `backend/app/crond.py`：只维护 crontab 里 `# >>> snh48-downloader managed >>>`
+  与 `# <<< snh48-downloader managed <<<` 之间的块，块外条目（wiki 同步、archivist_worker
+  等）原样保留
+- 原地覆盖写，保持 `root:crontab 600` 属主与权限；写前备份到
+  `config/backups/crontab.<时间戳>.bak`
+- 首次接管会清理早期不在受管块里的投稿同步行；内容无变化时不写文件（返回 `changed: false`）
+- 界面按北京时间填写，写入 crontab 时自动换算 UTC
+- 新增 `GET /api/schedule/status`，设置页展示当前生效的定时任务；`POST /api/config`
+  保存时一并同步 crontab
+- `docker-compose.yml` 把 `/var/spool/cron/crontabs` 挂进后端容器
+  （`CRONTAB_PATH=/host-crontabs/root`）
+
+实测：受管块写入、权限保持、幂等（重复保存返回「定时任务无变化」）均正常；
+日历日志输出「票务缓存刷新间隔: 6 小时」。
 
 ## 五、风险与约束
 

@@ -34,8 +34,33 @@ app.add_middleware(
 )
 
 cache = {"data": [], "timestamp": 0}
-CACHE_TTL = 3600 * 24
+CACHE_TTL_DEFAULT = 3600 * 6      # 票务缓存刷新间隔默认 6 小时（可在设置页调整）
 RETRY_COOLDOWN = 600   # 抓取失败后 10 分钟再重试（不占满 24 小时缓存）
+
+_ticket_ttl_cache = {"mtime": None, "ttl": CACHE_TTL_DEFAULT}
+
+
+def ticket_cache_ttl() -> int:
+    """从 roster.yaml 读取票务刷新间隔（refresh.tickets.hours），默认 6 小时。"""
+    try:
+        mtime = os.path.getmtime(ROSTER_PATH)
+    except OSError:
+        return CACHE_TTL_DEFAULT
+    if _ticket_ttl_cache["mtime"] == mtime:
+        return _ticket_ttl_cache["ttl"]
+    ttl = CACHE_TTL_DEFAULT
+    try:
+        with open(ROSTER_PATH, encoding="utf-8") as fh:
+            config = yaml.safe_load(fh) or {}
+        hours = ((config.get("refresh") or {}).get("tickets") or {}).get("hours")
+        if hours:
+            ttl = max(1, min(168, int(hours))) * 3600
+    except Exception as exc:                      # noqa: BLE001
+        print(f"⚠️ 读取票务刷新间隔失败，用默认 {CACHE_TTL_DEFAULT // 3600}h: {exc}",
+              flush=True)
+    _ticket_ttl_cache.update(mtime=mtime, ttl=ttl)
+    print(f"🕒 票务缓存刷新间隔: {ttl // 3600} 小时", flush=True)
+    return ttl
 
 # 排期数据改用 SQLite（与下载器共用 /config/snh48.db）；
 # 原 data.json 仅作为首次启动时的种子数据。
@@ -378,10 +403,11 @@ def enrich_status(items):
 @app.get("/", response_class=HTMLResponse)
 async def read_item(request: Request):
     current_time = time.time()
-    if current_time - cache["timestamp"] > CACHE_TTL:
+    ttl = ticket_cache_ttl()
+    if current_time - cache["timestamp"] > ttl:
         data, ok = fetch_snh48_tickets()
         cache["data"] = data
-        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
+        cache["timestamp"] = current_time if ok else current_time - ttl + RETRY_COOLDOWN
     else:
         if not cache["data"]:
             local_dict = load_local_data()
@@ -402,10 +428,11 @@ async def read_item(request: Request):
 @app.get("/api/tickets")
 async def get_tickets_api():
     current_time = time.time()
-    if current_time - cache["timestamp"] > CACHE_TTL:
+    ttl = ticket_cache_ttl()
+    if current_time - cache["timestamp"] > ttl:
         data, ok = fetch_snh48_tickets()
         cache["data"] = data
-        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
+        cache["timestamp"] = current_time if ok else current_time - ttl + RETRY_COOLDOWN
     enrich_status(cache["data"])
     return {"status": "success", "data": cache["data"], "updated_at": cache["timestamp"]}
 
@@ -413,10 +440,11 @@ async def get_tickets_api():
 @app.get("/api/calendar.ics")
 async def get_calendar_ics():
     current_time = time.time()
-    if current_time - cache["timestamp"] > CACHE_TTL:
+    ttl = ticket_cache_ttl()
+    if current_time - cache["timestamp"] > ttl:
         data, ok = fetch_snh48_tickets()
         cache["data"] = data
-        cache["timestamp"] = current_time if ok else current_time - CACHE_TTL + RETRY_COOLDOWN
+        cache["timestamp"] = current_time if ok else current_time - ttl + RETRY_COOLDOWN
 
     cal = Calendar()
     cal.add("prodid", "-//SNH48 Calendar API//")
