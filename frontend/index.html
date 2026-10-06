@@ -105,14 +105,15 @@
         </div>
         <!-- 分团面板：所有已启用分团共用，数据按 activeGroupCode 取 -->
         <div data-panel="group" v-show="activeGroup && activeGroup.enabled">
-            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                <div class="xl:col-span-4 space-y-6 xl:sticky xl:top-6 xl:self-start">
+            <div class="space-y-8">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 flex flex-col">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                         <h2 class="text-lg font-bold text-slate-800">星梦剧院公演日历</h2>
                     </div>
 
+                    <div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8">
+                    <div>
                     <div class="flex justify-between items-center mb-2 px-1">
                         <button @click="changeMonth(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -134,12 +135,13 @@
                             <span v-if="scheduleMap[`${currentMonth}月${day}日`]" class="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-pink-500 rounded-full shadow-[0_0_4px_rgba(236,72,153,0.8)]"></span>
                         </div>
                     </div>
+                    </div>
 
-                    <div class="border-t border-slate-100 pt-3">
+                    <div class="lg:border-l lg:border-slate-100 lg:pl-8">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-xs font-bold text-slate-500">{{ selectedDate }} 排期安排</span>
                         </div>
-                        <div v-if="scheduleMap[selectedDate] && scheduleMap[selectedDate].length > 0" class="space-y-2 max-h-56 overflow-y-auto no-scrollbar">
+                        <div v-if="scheduleMap[selectedDate] && scheduleMap[selectedDate].length > 0" class="grid grid-cols-1 2xl:grid-cols-2 gap-2 max-h-80 overflow-y-auto no-scrollbar">
                             <div class="flex items-stretch gap-2" v-for="show in scheduleMap[selectedDate]" :key="show.id">
                                 <a :href="show.link" target="_blank" class="flex-1 block bg-slate-50 hover:bg-orange-50 border border-slate-100 p-2.5 rounded-lg transition-colors group">
                                     <div class="flex justify-between items-start mb-1">
@@ -178,9 +180,8 @@
                             当日无公演安排
                         </div>
                     </div>
+                    </div>
                 </div>
-                </div>
-                <div class="xl:col-span-8 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-4">
                         <div class="flex items-center gap-2">
@@ -223,9 +224,9 @@
                                 class="px-2.5 py-1.5 rounded-lg border text-xs font-medium transition">{{ opt.label }}</button>
                     </div>
 
-                    <div class="overflow-y-auto no-scrollbar max-h-80 bg-slate-50 rounded-xl border border-slate-100 p-2 space-y-2">
-                        <div v-if="uploadLoading" class="text-center text-xs text-slate-400 py-6">加载中...</div>
-                        <div v-else-if="uploads.length === 0" class="text-center text-xs text-slate-400 py-6">
+                    <div class="overflow-y-auto no-scrollbar max-h-[600px] bg-slate-50 rounded-xl border border-slate-100 p-2 grid grid-cols-1 2xl:grid-cols-2 gap-2">
+                        <div v-if="uploadLoading" class="col-span-full text-center text-xs text-slate-400 py-6">加载中...</div>
+                        <div v-else-if="uploads.length === 0" class="col-span-full text-center text-xs text-slate-400 py-6">
                             暂无匹配投稿（投稿目录可能仍在抓取中）
                         </div>
                         <label v-for="item in uploads" :key="item.bvid"
@@ -249,7 +250,7 @@
                             </div>
                         </label>
                         <button v-if="uploads.length < uploadTotal" @click="loadMoreUploads"
-                                class="w-full text-xs text-slate-500 py-2 hover:text-slate-700 transition">
+                                class="col-span-full w-full text-xs text-slate-500 py-2 hover:text-slate-700 transition">
                             加载更多（剩余 {{ uploadTotal - uploads.length }} 条）
                         </button>
                     </div>
@@ -287,9 +288,6 @@
                         </div>
                     </div>
                 </div>
-                </div>
-            </div>
-            <div class="mt-8">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-2">
@@ -299,8 +297,7 @@
                         <button @click="addTeam" class="text-sm bg-pink-50 text-pink-600 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 新增队伍</button>
                     </div>
 
-                    <div class="space-y-6">
-                        <transition-group name="list">
+                        <transition-group name="list" tag="div" class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                             <div v-for="(team, tIndex) in activeGroupTeams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1" :class="team.enabled ? 'bg-pink-400' : 'bg-slate-300'"></div>
                                 <div class="flex justify-between items-start mb-4 pl-2">
@@ -356,7 +353,6 @@
                                 </div>
                             </div>
                         </transition-group>
-                    </div>
                 </div>
             </div>
         </div>
@@ -429,8 +425,7 @@
             </div>
         </div>
         <div data-panel="settings" v-show="activeTab === 'settings'">
-            <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
-                <div class="xl:col-span-4 space-y-6">
+            <div class="mx-auto max-w-4xl space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center gap-2 mb-4">
                         <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -602,8 +597,6 @@
                     </p>
                 </div>
 
-                </div>
-                <div class="xl:col-span-8 space-y-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center gap-2 mb-6">
                         <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
@@ -798,7 +791,6 @@
                         「会改动数据」的操作必须先用「预览」跑一遍（脚本的 dry-run，只打印将要改动的内容），
                         预览成功后才允许「确认执行」。任务在后台运行，可随时刷新查看日志。
                     </p>
-                </div>
                 </div>
             </div>
         </div>
