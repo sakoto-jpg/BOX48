@@ -21,11 +21,20 @@ MC_TITLE_SUFFIX = "MC合集"  # MC模式入库标题/目录后缀；_auto_rewash
 
 
 def _extract_valid_date(title: str) -> str:
-    """从标题里提取合法的 8 位公演日期；官方偶有笔误（如 202606923）时返回空。"""
+    """从标题里提取合法的公演日期；官方偶有笔误（如 202606923）时返回空。
+
+    支持 8 位（20261029）与标题开头的 6 位（261029）两种写法。
+    """
     for match in re.finditer(r"(20\d{2})(\d{2})(\d{2})", title or ""):
         month, day = int(match.group(2)), int(match.group(3))
         if 1 <= month <= 12 and 1 <= day <= 31:
             return match.group(0)
+    short = re.match(r"^\s*(\d{2})(\d{2})(\d{2})(?!\d)", title or "")
+    if short:
+        year, month, day = (int(short.group(1)), int(short.group(2)),
+                            int(short.group(3)))
+        if 1 <= month <= 12 and 1 <= day <= 31:
+            return f"20{year:02d}{month:02d}{day:02d}"
     return ""
 
 
@@ -117,6 +126,24 @@ class Snh48Scanner:
                     if best is None or score > best[0]:
                         best = (score, team_name)
         return best[1] if best else None
+
+    def _special_team_name(self, group_code: str):
+        """手动下载匹配不到队伍时，回退到该分团的「特殊公演」队伍。"""
+        if not group_code:
+            return None
+        try:
+            import group_config
+            special_name = None
+            for item in group_config.teams():
+                if item.get("group") == group_code and item.get("code") == "special":
+                    special_name = item.get("name")
+                    break
+            if not special_name:
+                return None
+            roster = self.nfo_builder._load_roster(self.config_path, enabled_only=False)
+            return special_name if special_name in roster else None
+        except Exception:
+            return None
 
     # 编码策略固定为：AV1 > H.265(HEVC) > H.264(AVC)
     CODEC_PRIORITY = ('av01', 'hevc', 'avc')
@@ -565,7 +592,8 @@ class Snh48Scanner:
                     else:
                         print(f"❌ 解析详情彻底失败 {bvid}", flush=True)
 
-    def _process_bvid(self, bvid: str, keep_existing: bool = False, scope: str = 'full', include_disabled: bool = False) -> bool:
+    def _process_bvid(self, bvid: str, keep_existing: bool = False, scope: str = 'full',
+                      include_disabled: bool = False, group_code: str = None) -> bool:
         """解析 bvid → 匹配团队/日期 → 下载入库。手动补档与自动洗版共用。
 
         调用前需保证 active_tasks[bvid] 已存在(用于进度展示)。
@@ -589,6 +617,8 @@ class Snh48Scanner:
                     title = v_info.get('title', '')
                     self.active_tasks[bvid]['title'] = title
                     target_team = self._match_team(title, include_disabled=include_disabled)
+                    if not target_team and group_code:
+                        target_team = self._special_team_name(group_code)
                     date_str = _extract_valid_date(title) or v_info.get('upload_date', '')
 
                     if target_team and date_str and re.match(r'^\d{8}$', date_str):
@@ -610,11 +640,12 @@ class Snh48Scanner:
                     self.active_tasks[bvid]['status'] = "解析彻底失败"
         return False
 
-    def download_single(self, video_url: str, scope: str = None):
+    def download_single(self, video_url: str, scope: str = None, group_code: str = None):
         """手动下载单个 BV。
 
         scope: 'full' 整场 / 'mc' 仅MC；显式传入优先，未传则回退「手动入库」设置。
         范围发生变化时（洗版换范围）在新文件成功落盘后清理旧版本目录。
+        group_code 用于匹配不到队伍时回退到该分团的「特殊公演」。
         """
         bvid_match = re.search(r'(BV\w+)', video_url)
         if not bvid_match: return
@@ -627,7 +658,7 @@ class Snh48Scanner:
         old_scope = old.get('scope') if old else None
         self.active_tasks[bvid] = {"title": bvid, "status": "获取视频信息中...", "progress": "0%", "p_current": 0, "p_total": "?"}
         # 手动下载允许匹配未开启自动入库的队伍
-        self._process_bvid(bvid, scope=scope, include_disabled=True)
+        self._process_bvid(bvid, scope=scope, include_disabled=True, group_code=group_code)
 
         new = self.history_store.get(bvid)
         if (old_path and old_scope and old_scope != scope and new

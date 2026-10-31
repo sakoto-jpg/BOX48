@@ -269,7 +269,9 @@
                     </div>
 
                     <div class="flex items-center justify-between mt-3">
-                        <span class="text-xs text-slate-500">已选 {{ uploadSelected.length }} 条 / 匹配 {{ uploadTotal }} 条</span>
+                        <span class="text-xs text-slate-500">已选 {{ uploadSelected.length }} 条 / 匹配 {{ uploadTotal }} 条
+                            <span v-if="downloadMsg" class="ml-2" :class="downloadMsg.startsWith('✅') ? 'text-green-600' : 'text-red-500'">{{ downloadMsg }}</span>
+                        </span>
                         <div class="flex gap-2">
                             <button v-if="uploadRepair.show" @click="runRepairAction" :disabled="uploadSubmitting"
                                     class="bg-sky-600 hover:bg-sky-700 disabled:bg-slate-300 text-white font-semibold px-3 py-2 rounded-lg text-sm transition">
@@ -923,6 +925,7 @@
                 const uploadSelected = ref([]);
                 const uploadStats = ref({});
                 const uploadSubmitting = ref(false);
+                const downloadMsg = ref('');
                 let uploadPoll = null;
 
                 // Emby 连接状态(配置在 roster.yaml 中，这里仅展示状态)
@@ -1265,15 +1268,16 @@
                             body: JSON.stringify({
                                 items,
                                 scope: scope || config.value.manual_download_scope || 'full',
-                                force: !!force
+                                force: !!force,
+                                group: activeGroupCode.value
                             })
                         });
                         const data = await res.json();
-                        alert('✅ ' + (data.message || '已投递'));
+                        downloadMsg.value = '✅ ' + (data.message || '已投递');
                         uploadSelected.value = [];
                         fetchDownloadQueue();
                     } catch (e) {
-                        alert('❌ 请求失败');
+                        downloadMsg.value = '❌ 请求失败：' + e;
                     } finally {
                         uploadSubmitting.value = false;
                     }
@@ -1638,7 +1642,7 @@
                     uploadCategory, uploadCategories, uploadCategoryOptions, setUploadCategory, uploadCategoryCount,
                     uploadScopeOptions, uploadDownloadedScope, setUploadDownloadedScope,
                     uploadCodecOptions, uploadDownloadedCodec, setUploadDownloadedCodec, uploadCodecLabel,
-                    uploadSelected, uploadStats, uploadStatsText, uploadSubmitting, uploadBvCandidate,
+                    uploadSelected, uploadStats, uploadStatsText, uploadSubmitting, downloadMsg, uploadBvCandidate,
                     uploadAction, uploadScopeLabel,
                     uploadRepair, runRepairAction,
                     searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,

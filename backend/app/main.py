@@ -710,6 +710,7 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
     if scope not in ("full", "mc"):
         scope = None
     force = bool(payload.get("force"))
+    group_code = str(payload.get("group") or "").strip()
 
     # 提交时整批入队，前端「排队中」才能看到后续任务
     with download_queue_lock:
@@ -722,6 +723,7 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
                 "title": item["title"] or item["bvid"],
                 "scope": scope or "auto",
                 "force": force,
+                "group": group_code,
             })
         download_queue.extend(entries)
 
@@ -736,7 +738,8 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
                 if not entry["force"] and scanner._is_downloaded(bvid):
                     print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
                     continue
-                scanner.download_single(f"https://www.bilibili.com/video/{bvid}", scope=scope)
+                scanner.download_single(f"https://www.bilibili.com/video/{bvid}",
+                                        scope=scope, group_code=entry.get("group"))
 
     background_tasks.add_task(run_batch)
     label = "洗版" if force else "下载"
