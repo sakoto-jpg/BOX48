@@ -297,6 +297,19 @@
                         <button @click="addTeam" class="text-sm bg-pink-50 text-pink-600 px-3 py-1.5 rounded-lg font-bold hover:bg-pink-100 transition flex items-center gap-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg> 新增队伍</button>
                     </div>
 
+                    <div v-if="newTeamDraft !== null" class="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-pink-200 bg-pink-50 p-3">
+                        <span class="text-xs font-semibold text-pink-700 shrink-0">新队伍名称</span>
+                        <input v-model="newTeamDraft" @keydown.enter="confirmAddTeam"
+                               placeholder="例如：GNZ48 特殊公演"
+                               class="flex-1 min-w-[220px] px-3 py-2 bg-white border border-pink-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-pink-300">
+                        <button @click="confirmAddTeam" :disabled="newTeamBusy"
+                                class="bg-pink-600 hover:bg-pink-700 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                            {{ newTeamBusy ? '创建中...' : '创建' }}
+                        </button>
+                        <button @click="newTeamDraft = null" class="text-sm text-slate-500 hover:text-slate-700 px-1">取消</button>
+                    </div>
+                    <p v-if="newTeamMsg" class="mb-3 text-xs" :class="newTeamMsg.startsWith('已') ? 'text-green-600' : 'text-red-500'">{{ newTeamMsg }}</p>
+
                         <transition-group name="list" tag="div" class="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
                             <div v-for="(team, tIndex) in activeGroupTeams" :key="'team'+tIndex" class="border border-slate-200 rounded-xl p-5 relative group overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1" :class="team.enabled ? 'bg-pink-400' : 'bg-slate-300'"></div>
@@ -1479,10 +1492,41 @@
                 // 用 /api/groups 里该分团的队伍名来配对
                 const activeGroupTeams = computed(() => {
                     const all = config.value.teams || [];
+                    const code = activeGroupCode.value;
                     const names = new Set((activeGroup.value?.teams || []).map(t => t.name));
-                    return names.size ? all.filter(t => names.has(t.name)) : all;
+                    // 新队伍带 group 字段，可直接按分团过滤；历史数据没有 group，按名字配对
+                    return all.filter(t => t.group ? t.group === code : (names.size ? names.has(t.name) : true));
                 });
-                const addTeam = () => config.value.teams.push({ name: '新队伍', enabled: true, notify: false, keywords: [], members: [], oshis: [] });
+                const newTeamDraft = ref(null);
+                const newTeamBusy = ref(false);
+                const newTeamMsg = ref('');
+                const addTeam = () => {
+                    newTeamMsg.value = '';
+                    newTeamDraft.value = activeGroup.value ? `${activeGroup.value.name} 新队伍` : '新队伍';
+                };
+                const confirmAddTeam = async () => {
+                    const name = (newTeamDraft.value || '').trim();
+                    if (!name || newTeamBusy.value) return;
+                    newTeamBusy.value = true;
+                    newTeamMsg.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/teams/create`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ group: activeGroupCode.value, name }),
+                        });
+                        const data = await res.json();
+                        if (!data.ok) { newTeamMsg.value = data.message || '新增队伍失败'; return; }
+                        config.value.teams.push(data.team);
+                        await loadGroups();
+                        newTeamDraft.value = null;
+                        newTeamMsg.value = `已新增「${name}」`;
+                    } catch (e) {
+                        newTeamMsg.value = '新增队伍失败: ' + e;
+                    } finally {
+                        newTeamBusy.value = false;
+                    }
+                };
                 const removeTeam = (team) => {
                     const idx = config.value.teams.indexOf(team);
                     if (idx > -1 && confirm('删除队伍？')) config.value.teams.splice(idx, 1);
@@ -1586,7 +1630,8 @@
                     scheduleMap, currentYear, currentMonth, daysInMonth, firstDayOffset, selectedDate,
                     changeMonth, fetchDownloadQueue, triggerScan, saveConfig, toggleManualSub,
                     scheduleStatusOf, queueScheduleDownload, fetchScheduleStatus,
-                    addSub, removeSub, addTeam, removeTeam, addKeyword, addMember, toggleOshi,
+                    addSub, removeSub, addTeam, confirmAddTeam, newTeamDraft, newTeamBusy, newTeamMsg,
+                    removeTeam, addKeyword, addMember, toggleOshi,
                     schedulerStatus, availableHours, setSchedulerMode, addCronHour, removeCronHour,
                     embyStatus, embyStatusLabel,
                     uploads, uploadTotal, uploadLoading, uploadKeyword, uploadOnlyMissing, uploadOnlyDownloaded,

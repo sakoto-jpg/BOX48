@@ -523,6 +523,81 @@ def save_groups_config(payload: dict):
     }
 
 
+@app.post("/api/teams/create")
+def create_team(payload: dict):
+    """新增队伍：同时登记 groups.yaml（标题匹配）与 roster.yaml（花名册）。
+
+    花名册是跨分团的全局列表，队伍名是唯一键，所以不同分团的「特殊公演」
+    需要带分团前缀（如 GNZ48 特殊公演），否则会串到别的分团。
+    """
+    group_code = str((payload or {}).get("group") or "").strip()
+    name = str((payload or {}).get("name") or "").strip()
+    if not group_code or not name:
+        return {"ok": False, "message": "分团与队伍名称不能为空"}
+    if not os.path.exists(GROUPS_CONFIG_PATH):
+        return {"ok": False, "message": f"配置文件不存在: {GROUPS_CONFIG_PATH}"}
+
+    with open(GROUPS_CONFIG_PATH, encoding="utf-8") as fh:
+        groups_config = yaml.safe_load(fh) or {}
+    group_def = next((g for g in groups_config.get("groups", [])
+                      if g.get("code") == group_code), None)
+    if not group_def:
+        return {"ok": False, "message": f"未知分团: {group_code}"}
+
+    with open(CONFIG_PATH, encoding="utf-8") as fh:
+        roster = yaml.safe_load(fh) or {}
+    roster_teams = roster.setdefault("teams", [])
+    if any(item.get("name") == name for item in roster_teams):
+        return {"ok": False, "message": f"花名册里已有队伍「{name}」"}
+
+    group_name = str(group_def.get("name") or group_code)
+    short_name = name[len(group_name):].strip() if name.startswith(group_name) else name
+    default_keywords = [short_name] if short_name else [name]
+    if "特殊公演" in name:
+        default_keywords = list(dict.fromkeys([short_name or name, "特别公演", "联合生日公演"]))
+
+    teams_def = groups_config.setdefault("teams", [])
+    existing_def = next((item for item in teams_def
+                         if item.get("group") == group_code and item.get("name") == name), None)
+    if existing_def:
+        code = str(existing_def.get("code"))
+        default_keywords = existing_def.get("keywords") or default_keywords
+    else:
+        base = "special" if "特殊公演" in name else "custom"
+        used = {str(item.get("code")) for item in teams_def if item.get("group") == group_code}
+        code, seq = base, 2
+        while code in used:
+            code, seq = f"{base}{seq}", seq + 1
+        teams_def.append({
+            "group": group_code,
+            "code": code,
+            "name": name,
+            "fandom": group_name,
+            "keywords": default_keywords,
+            "sync_roster": False,
+            "cast_mode": "roster",
+        })
+        _backup_file(GROUPS_CONFIG_PATH)
+        _atomic_write_yaml(GROUPS_CONFIG_PATH, groups_config)
+
+    team = {
+        "name": name,
+        "group": group_code,
+        "enabled": False,
+        "notify": False,
+        "keywords": list(default_keywords),
+        "members": [],
+        "oshis": [],
+        "audio_offset": 0,
+    }
+    roster_teams.append(team)
+    _backup_file(CONFIG_PATH)
+    _atomic_write_yaml(CONFIG_PATH, roster)
+    scanner.nfo_builder.reload_config()
+    print(f"👥 新增队伍: {group_code}.{code} {name}", flush=True)
+    return {"ok": True, "message": f"已新增队伍「{name}」", "team": team, "code": code}
+
+
 # ── 维护任务（阶段 5b）：把 tools/ 下的脚本做成前端按钮 ──────────────
 @app.get("/api/maintenance/actions")
 def maintenance_actions():
