@@ -3,6 +3,7 @@ services:
     build: 
       context: ./backend
       dockerfile: Dockerfile
+    image: snh48-downloader-snh48-backend:vaapi   # 含 Intel VAAPI 驱动（当前 registry 不可达时用本地镜像）
     container_name: snh48-downloader-backend
     restart: unless-stopped
     ports:
@@ -14,6 +15,8 @@ services:
       - /mnt/nas/anime/video/live48:/downloads
       - /root/emby-config:/emby-config   # Emby 元数据目录（人物头像/剧集封面写入）
       - /var/spool/cron/crontabs:/host-crontabs   # 宿主机 crontab（设置页可改刷新策略）
+    devices:
+      - /dev/dri:/dev/dri   # Intel Quick Sync（VAAPI/QSV），直播转码用
     environment:
       - TZ=Asia/Shanghai
       - CONFIG_PATH=/config/roster.yaml
