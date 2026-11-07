@@ -104,16 +104,25 @@ def enumerate_bvids(cookie_path: str, list_limit: int, list_delay: float, state:
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
     )
     index = 0
+    tail = []
     for line in proc.stdout:
         bvid = line.strip()
         if len(bvid) >= 10 and bvid.startswith("BV"):
             index += 1
             yield bvid, index
+        elif bvid:
+            tail.append(bvid)
+            tail[:] = tail[-8:]
     proc.wait()
     state["returncode"] = proc.returncode
     state["count"] = index
     if proc.returncode != 0:
         log(f"⚠️ yt-dlp 枚举结束但返回码为 {proc.returncode}，已枚举 {index} 条")
+        for line in tail[-5:]:
+            log(f"   yt-dlp: {line}")
+        if index == 0:
+            log("💡 412 / Request is blocked 通常表示 Cookie 已失效"
+                "（cookies.txt 缺少 SESSDATA）或触发 B 站风控")
 
 
 def fetch_detail(session: requests.Session, bvid: str) -> dict:
