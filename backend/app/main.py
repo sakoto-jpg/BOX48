@@ -9,8 +9,10 @@ import datetime
 import group_config
 import crond
 import maintenance
+import pocket48_live
 from emby_client import EmbyClient
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from scheduler import Snh48Scanner
@@ -744,6 +746,42 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_batch)
     label = "洗版" if force else "下载"
     return {"message": f"已投递 {len(entries)} 个{label}任务，将按顺序处理"}
+
+
+@app.get("/api/pocket48/lives")
+def pocket48_lives(refresh: int = 0):
+    """口袋48 正在直播的房间列表（特别关心成员置顶，缓存 30 秒）。"""
+    try:
+        return pocket48_live.fetch_lives(CONFIG_PATH, force=bool(refresh))
+    except Exception as exc:
+        return {"ok": False, "updated_at": 0, "count": 0, "items": [],
+                "message": f"口袋48接口请求失败: {exc}"}
+
+
+@app.get("/api/pocket48/stream/{live_id}/index.m3u8")
+def pocket48_playlist(live_id: str):
+    """按需把 RTMP 直播转封装成 HLS，返回播放列表。"""
+    if not re.fullmatch(r"\d+", live_id):
+        raise HTTPException(status_code=400, detail="无效的直播间 ID")
+    try:
+        path = pocket48_live.ensure_stream(live_id)
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return FileResponse(path, media_type="application/vnd.apple.mpegurl",
+                        headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/pocket48/stream/{live_id}/{segment}")
+def pocket48_segment(live_id: str, segment: str):
+    if not re.fullmatch(r"\d+", live_id) or not re.fullmatch(r"seg\d+\.ts", segment):
+        raise HTTPException(status_code=400, detail="无效的直播分片")
+    pocket48_live.touch(live_id)
+    path = os.path.join(pocket48_live.stream_dir(live_id), segment)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404, detail="分片不存在")
+    return FileResponse(path, media_type="video/mp2t",
+                        headers={"Cache-Control": "no-store"})
+
 
 @app.get("/api/emby_status")
 def get_emby_status():

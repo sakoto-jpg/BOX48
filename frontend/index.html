@@ -6,6 +6,7 @@
     <title>SNH48 公演自动化仓储</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
     <style>
         .list-enter-active, .list-leave-active { transition: all 0.4s ease; }
         .list-enter-from, .list-leave-to { opacity: 0; transform: translateY(15px); }
@@ -92,6 +93,8 @@
                             :class="{ 'tab-active': activeTab === 'group-' + g.code, 'tab-disabled': !g.enabled }">
                         <span class="tab-dot"></span>{{ g.name }}
                     </button>
+                    <button @click="selectTab('pocket')" class="tab-button"
+                            :class="{ 'tab-active': activeTab === 'pocket' }">口袋直播</button>
                     <button @click="selectTab('queue')" class="tab-button"
                             :class="{ 'tab-active': activeTab === 'queue' }">下载队列</button>
                     <button @click="selectTab('settings')" class="tab-button"
@@ -368,6 +371,76 @@
                                 </div>
                             </div>
                         </transition-group>
+                </div>
+            </div>
+        </div>
+        <div data-panel="pocket" v-show="activeTab === 'pocket'">
+            <div class="space-y-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-5 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        <h2 class="text-lg font-bold text-slate-800">口袋48 直播</h2>
+                        <span class="text-xs text-slate-400">
+                            在播 {{ pocketLives.length }} 个<span v-if="pocketUpdatedText"> · 更新于 {{ pocketUpdatedText }}</span>
+                        </span>
+                    </div>
+                    <button @click="fetchPocketLives(true)" :disabled="pocketLoading"
+                            class="bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                        {{ pocketLoading ? '刷新中...' : '刷新' }}
+                    </button>
+                </div>
+
+                <p v-if="pocketMessage" class="text-sm text-rose-500">{{ pocketMessage }}</p>
+
+                <div v-if="pocketLoading && pocketLives.length === 0"
+                     class="bg-white rounded-2xl border border-slate-100 p-10 text-center text-sm text-slate-400">
+                    正在获取直播间...
+                </div>
+                <div v-else-if="pocketLives.length === 0"
+                     class="bg-white rounded-2xl border border-slate-100 p-10 text-center text-sm text-slate-400">
+                    当前没有正在直播的房间
+                </div>
+                <div v-else class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                    <div v-for="live in pocketLives" :key="live.live_id" @click="openPocketLive(live)"
+                         class="bg-white rounded-2xl border overflow-hidden cursor-pointer transition hover:shadow-lg"
+                         :class="live.is_oshi ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-100'">
+                        <div class="relative bg-slate-900 aspect-[3/4]">
+                            <img :src="live.cover_url" :alt="live.title" loading="lazy" class="w-full h-full object-cover">
+                            <span class="absolute top-2 left-2 text-[10px] font-bold text-white bg-rose-600 px-2 py-0.5 rounded">LIVE</span>
+                            <span v-if="live.is_oshi" class="absolute top-2 right-2 text-[10px] font-bold text-amber-900 bg-amber-200 px-2 py-0.5 rounded-full">👑 特别关心</span>
+                            <span class="absolute bottom-2 left-2 text-[10px] font-semibold text-white bg-black/55 px-2 py-0.5 rounded">
+                                {{ live.live_type === 2 ? '📻 电台' : '📺 视频' }}
+                            </span>
+                            <span class="absolute bottom-2 right-2 text-[10px] font-semibold text-white bg-black/55 px-2 py-0.5 rounded">{{ live.online_num }} 人在线</span>
+                        </div>
+                        <div class="p-3">
+                            <p class="text-sm font-bold text-slate-800 line-clamp-2">{{ live.title }}</p>
+                            <p class="text-xs text-slate-500 mt-1">{{ live.member.star_name || live.member.nickname }}</p>
+                            <div class="flex items-center justify-between mt-2 text-[10px] text-slate-400">
+                                <span>{{ live.member.group }}</span>
+                                <span>{{ pocketLiveDuration(live.start_time) }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="pocketPlayer" class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-3" @click.self="closePocketLive">
+                <div class="bg-slate-900 rounded-2xl overflow-hidden w-full max-w-4xl shadow-2xl">
+                    <div class="flex items-center justify-between px-4 py-3 gap-3">
+                        <div class="min-w-0">
+                            <p class="text-white font-bold truncate">{{ pocketPlayer.title }}</p>
+                            <p class="text-xs text-slate-400 truncate">{{ pocketPlayer.member.star_name || pocketPlayer.member.nickname }} · {{ pocketPlayer.member.group }}</p>
+                        </div>
+                        <button @click="closePocketLive" class="shrink-0 text-slate-300 hover:text-white text-xl leading-none">✕</button>
+                    </div>
+                    <div class="relative bg-black h-[65vh] max-h-[720px]">
+                        <video ref="pocketVideo" controls autoplay playsinline class="w-full h-full object-contain"></video>
+                        <div v-if="pocketPlayerLoading" class="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm">
+                            正在连接直播...
+                        </div>
+                    </div>
+                    <div v-if="pocketPlayerMessage" class="px-4 py-2 text-xs text-rose-300 bg-rose-950/40">{{ pocketPlayerMessage }}</div>
                 </div>
             </div>
         </div>
@@ -819,7 +892,7 @@
     </div>
 
     <script>
-        const { createApp, ref, computed, watch, onMounted, onUnmounted } = Vue;
+const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
 
         const app = createApp({
             setup() {
@@ -860,11 +933,104 @@
                     return params;
                 };
 
+                const pocketLives = ref([]);
+                const pocketLoading = ref(false);
+                const pocketUpdatedAt = ref(0);
+                const pocketMessage = ref('');
+                const pocketPlayer = ref(null);
+                const pocketPlayerLoading = ref(false);
+                const pocketPlayerMessage = ref('');
+                const pocketVideo = ref(null);
+                let pocketHls = null;
+                let pocketPoll = null;
+
+                const pocketUpdatedText = computed(() => pocketUpdatedAt.value
+                    ? new Date(pocketUpdatedAt.value * 1000).toLocaleTimeString('zh-CN', {
+                        hour: '2-digit', minute: '2-digit'
+                    })
+                    : '');
+                const pocketLiveDuration = (ts) => {
+                    if (!ts) return '';
+                    const mins = Math.max(0, Math.floor((Date.now() - ts) / 60000));
+                    if (mins < 60) return `已开播 ${mins} 分钟`;
+                    return `已开播 ${Math.floor(mins / 60)} 小时 ${mins % 60} 分`;
+                };
+                const fetchPocketLives = async (force = false) => {
+                    pocketLoading.value = true;
+                    pocketMessage.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/lives${force ? '?refresh=1' : ''}`);
+                        const data = await res.json();
+                        if (!data.ok) {
+                            pocketMessage.value = data.message || '获取直播间失败';
+                            return;
+                        }
+                        pocketLives.value = data.items || [];
+                        pocketUpdatedAt.value = data.updated_at || 0;
+                        if (pocketPlayer.value
+                                && !pocketLives.value.some(l => l.live_id === pocketPlayer.value.live_id)) {
+                            closePocketLive();
+                        }
+                    } catch (e) {
+                        pocketMessage.value = '获取直播间失败：' + e;
+                    } finally {
+                        pocketLoading.value = false;
+                    }
+                };
+                const closePocketLive = () => {
+                    if (pocketHls) {
+                        pocketHls.destroy();
+                        pocketHls = null;
+                    }
+                    if (pocketVideo.value) {
+                        pocketVideo.value.pause();
+                        pocketVideo.value.removeAttribute('src');
+                        pocketVideo.value.load();
+                    }
+                    pocketPlayer.value = null;
+                    pocketPlayerLoading.value = false;
+                    pocketPlayerMessage.value = '';
+                };
+                const openPocketLive = async (live) => {
+                    closePocketLive();
+                    pocketPlayer.value = live;
+                    pocketPlayerLoading.value = true;
+                    pocketPlayerMessage.value = '';
+                    await nextTick();
+                    const video = pocketVideo.value;
+                    if (!video) return;
+                    const url = `${API_BASE}/pocket48/stream/${live.live_id}/index.m3u8`;
+                    if (window.Hls && window.Hls.isSupported()) {
+                        pocketHls = new window.Hls({ liveDurationInfinity: true, lowLatencyMode: true });
+                        pocketHls.loadSource(url);
+                        pocketHls.attachMedia(video);
+                        pocketHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+                            pocketPlayerLoading.value = false;
+                            video.play().catch(() => {});
+                        });
+                        pocketHls.on(window.Hls.Events.ERROR, (event, data) => {
+                            if (!data.fatal) return;
+                            pocketPlayerLoading.value = false;
+                            pocketPlayerMessage.value = data.type === window.Hls.ErrorTypes.NETWORK_ERROR
+                                ? '直播流连接失败，可能已下播或转流启动超时'
+                                : '播放出错：' + (data.details || data.type);
+                        });
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = url;
+                        pocketPlayerLoading.value = false;
+                        video.play().catch(() => {});
+                    } else {
+                        pocketPlayerLoading.value = false;
+                        pocketPlayerMessage.value = '当前浏览器不支持 HLS 播放';
+                    }
+                };
+
                 const selectTab = (key) => {
                     activeTab.value = key;
                     if (location.hash !== '#/' + key) {
                         history.replaceState(null, '', '#/' + key);
                     }
+                    if (key === 'pocket') fetchPocketLives();
                 };
 
                 const loadGroups = async () => {
@@ -1604,6 +1770,10 @@
                     fetchUploads();
                     fetchUploadStats();
                     uploadPoll = setInterval(fetchUploadStats, 15000);
+                    fetchPocketLives();
+                    pocketPoll = setInterval(() => {
+                        if (activeTab.value === 'pocket') fetchPocketLives();
+                    }, 60000);
                 });
 
                 // 切换分团标签时，把该分团的数据重新取一遍
@@ -1622,6 +1792,7 @@
                     if(embyPoll) clearInterval(embyPoll);
                     if(uploadPoll) clearInterval(uploadPoll);
                     if(schedulePoll) clearInterval(schedulePoll);
+                    if(pocketPoll) clearInterval(pocketPoll);
                 });
 
                 watch(selectedDate, () => {
@@ -1646,6 +1817,9 @@
                     uploadAction, uploadScopeLabel,
                     uploadRepair, runRepairAction,
                     searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,
+                    pocketLives, pocketLoading, pocketUpdatedAt, pocketUpdatedText, pocketMessage,
+                    pocketPlayer, pocketPlayerLoading, pocketPlayerMessage, pocketVideo,
+                    fetchPocketLives, openPocketLive, closePocketLive, pocketLiveDuration,
                     groups, activeTab, isSavingConfig, selectTab, loadGroups,
                     activeGroupCode, activeGroup, activeGroupTeams,
                     groupConfigs, testingNotify, testingEmby, savingGroups, showEmbyKey,
