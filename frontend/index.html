@@ -51,17 +51,15 @@
             vertical-align: middle;
         }
         .tab-button.tab-disabled { opacity: .55; }
-        @keyframes danmaku-fade-up {
-            0% { opacity: 0; transform: translateY(16px); }
-            10% { opacity: 1; transform: translateY(0); }
-            75% { opacity: 1; }
-            100% { opacity: 0; transform: translateY(-24px); }
-        }
         .danmaku-bubble {
-            animation: danmaku-fade-up 6s ease-out forwards;
             text-shadow: 0 1px 3px rgba(0, 0, 0, .85);
             word-break: break-word;
         }
+        .danmaku-enter-active { transition: opacity .3s ease, transform .3s ease; }
+        .danmaku-enter-from { opacity: 0; transform: translateY(14px); }
+        .danmaku-leave-active { transition: opacity .25s ease; position: absolute; width: 100%; }
+        .danmaku-leave-to { opacity: 0; }
+        .danmaku-move { transition: transform .3s ease; }
         .player-stage:fullscreen {
             border-radius: 0;
             width: 100vw;
@@ -462,11 +460,14 @@
                         <button @click="closePocketLive" class="pointer-events-auto shrink-0 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white text-lg leading-none flex items-center justify-center">✕</button>
                     </div>
 
-                    <div class="absolute inset-x-0 bottom-20 top-24 px-4 flex flex-col justify-end gap-1 overflow-hidden pointer-events-none z-10">
-                        <div v-for="item in danmakuVisible" :key="item._key"
-                             class="danmaku-bubble text-sm text-white leading-6">
-                            <span class="text-sky-300">{{ item.nick || '观众' }}：</span>{{ item.text }}
-                        </div>
+                    <div class="absolute inset-x-0 bottom-20 top-24 px-4 overflow-hidden pointer-events-none z-10">
+                        <transition-group name="danmaku" tag="div"
+                                          class="h-full flex flex-col justify-end gap-1">
+                            <div v-for="item in danmakuVisible" :key="item._key"
+                                 class="danmaku-bubble text-sm text-white leading-6">
+                                <span class="text-sky-300">{{ item.nick || '观众' }}：</span>{{ item.text }}
+                            </div>
+                        </transition-group>
                     </div>
 
                     <div v-if="pocketPlayerLoading" class="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm pointer-events-none z-10">
@@ -1383,10 +1384,9 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                         _key: `${msg.seq || msg.time || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                     };
                     danmakuVisible.value.push(item);
-                    if (danmakuVisible.value.length > 8) danmakuVisible.value.shift();
-                    setTimeout(() => {
-                        danmakuVisible.value = danmakuVisible.value.filter(x => x._key !== item._key);
-                    }, 6000);
+                    while (danmakuVisible.value.length > 6) {
+                        danmakuVisible.value.shift();
+                    }
                 };
                 const togglePocketPlay = () => {
                     const video = pocketVideo.value;
