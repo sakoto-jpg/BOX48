@@ -468,13 +468,13 @@ class Snh48Scanner:
                     if keep_existing:
                         codec_label = {'av1': 'AV1', 'h264': 'H.264', 'hevc': 'HEVC'}.get(codec, codec.upper())
                         payload = {
-                            "title": "[SNH48-DownLoader] 洗版完成",
+                            "title": "[BOX48] 洗版完成",
                             "body": f"【{perf_title}】\n已重新下载并替换为 {codec_label} 编码，前往 Emby 观看！",
                             "type": "success"
                         }
                     else:
                         payload = {
-                            "title": "[SNH48-DownLoader] MC合集入库完成" if is_mc else "[SNH48-DownLoader] 录播入库完成",
+                            "title": "[BOX48] MC合集入库完成" if is_mc else "[BOX48] 录播入库完成",
                             "body": f"【{perf_title}】\n已成功下载{'仅MC环节' if is_mc else '完整录播'}并刮削，前往 Emby 观看！",
                             "type": "success"
                         }
