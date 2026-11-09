@@ -170,30 +170,22 @@ def _media(path):
     return text if text.startswith("http") else "https://source.48.cn" + text
 
 
-def _normalize(msg: dict) -> dict:
+def _json_body(msg: dict) -> dict:
     body = msg.get("bodys")
-    text = ""
-    if isinstance(body, str):
-        text = body
-        if text.lstrip().startswith("{"):
-            try:
-                parsed = json.loads(text)
-                text = str(_first(parsed.get("replyText"), parsed.get("text"),
-                                  parsed.get("content"), "") or text)
-            except Exception:
-                pass
-    elif isinstance(body, list):
-        parts = []
-        for part in body:
-            if isinstance(part, dict):
-                parts.append(str(_first(part.get("msg"), part.get("text"), "") or ""))
-            elif isinstance(part, str):
-                parts.append(part)
-        text = "".join(parts)
-    elif isinstance(body, dict):
-        text = str(_first(body.get("msg"), body.get("text"), "") or "")
-    if not text:
-        text = str(_first(msg.get("content"), msg.get("text"), "") or "")
+    if isinstance(body, dict):
+        return body
+    if isinstance(body, str) and body.lstrip().startswith("{"):
+        try:
+            parsed = json.loads(body)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+    return {}
+
+
+def _normalize(msg: dict) -> dict:
+    kind_raw = str(_first(msg.get("msgType"), msg.get("type"), "") or "").upper()
+    data = _json_body(msg)
 
     ext = msg.get("extInfo")
     if isinstance(ext, str):
@@ -205,13 +197,23 @@ def _normalize(msg: dict) -> dict:
         ext = {}
     user = ext.get("user") or msg.get("user") or msg.get("userInfo") or {}
 
-    return {
+    item = {
         "id": str(_first(msg.get("msgIdClient"), msg.get("msgidClient"),
                          msg.get("msgId"), "") or ""),
         "time": int(_first(msg.get("msgTime"), msg.get("time"),
                            msg.get("createTime"), 0) or 0),
-        "type": _first(msg.get("msgType"), msg.get("type"), 0),
-        "text": text,
+        "type": kind_raw,
+        "kind": "text",
+        "text": "",
+        "image": "",
+        "gift_name": "",
+        "gift_num": 0,
+        "gift_icon": "",
+        "reply_text": "",
+        "quote_text": "",
+        "live_title": "",
+        "live_id": "",
+        "live_cover": "",
         "user": {
             "id": str(_first(user.get("userId"), user.get("id"), user.get("uid"), "") or ""),
             "name": str(_first(user.get("nickName"), user.get("nickname"),
@@ -220,6 +222,37 @@ def _normalize(msg: dict) -> dict:
             "level": user.get("level") or 0,
         },
     }
+
+    if kind_raw == "TEXT":
+        item["text"] = msg.get("bodys") if isinstance(msg.get("bodys"), str) else ""
+    elif kind_raw == "IMAGE":
+        item["kind"] = "image"
+        item["image"] = _media(data.get("url"))
+    elif kind_raw == "EXPRESSIMAGE":
+        item["kind"] = "image"
+        info = data.get("expressImgInfo") or {}
+        item["image"] = _media(info.get("emotionRemote"))
+    elif kind_raw == "GIFT_TEXT":
+        item["kind"] = "gift"
+        info = data.get("giftInfo") or {}
+        item["gift_name"] = str(info.get("giftName") or "礼物")
+        item["gift_num"] = int(info.get("giftNum") or 1)
+        item["gift_icon"] = _media(info.get("picPath"))
+    elif kind_raw == "REPLY":
+        item["kind"] = "reply"
+        info = data.get("replyInfo") or {}
+        item["reply_text"] = str(info.get("replyText") or "")
+        item["quote_text"] = str(info.get("text") or "")
+    elif kind_raw == "LIVEPUSH":
+        item["kind"] = "live"
+        info = data.get("livePushInfo") or {}
+        item["live_title"] = str(info.get("liveTitle") or "")
+        item["live_id"] = str(info.get("liveId") or "")
+        item["live_cover"] = _media(info.get("liveCover"))
+    else:
+        item["kind"] = "unknown"
+        item["text"] = str(data.get("messageType") or kind_raw)
+    return item
 
 
 def list_messages(token: str, server_id, channel_id, scope: str = "all",
