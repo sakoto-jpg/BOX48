@@ -986,7 +986,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 let pollInterval = null;
                 let embyPoll = null;
 
-                const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['queue', 'settings']);
+                const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['pocket', 'queue', 'settings']);
 
                 // 当前分团代码（标签页决定），用于把各卡片的数据限定在本分团
                 const activeGroupCode = computed(() =>

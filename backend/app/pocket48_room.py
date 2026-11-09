@@ -161,11 +161,26 @@ def _first(*values):
     return None
 
 
+def _media(path):
+    if not path:
+        return ""
+    text = str(path)
+    return text if text.startswith("http") else "https://source.48.cn" + text
+
+
 def _normalize(msg: dict) -> dict:
-    user = msg.get("user") or msg.get("userInfo") or {}
-    body = msg.get("bodys") or msg.get("body") or []
+    body = msg.get("bodys")
     text = ""
-    if isinstance(body, list):
+    if isinstance(body, str):
+        text = body
+        if text.lstrip().startswith("{"):
+            try:
+                parsed = json.loads(text)
+                text = str(_first(parsed.get("replyText"), parsed.get("text"),
+                                  parsed.get("content"), "") or text)
+            except Exception:
+                pass
+    elif isinstance(body, list):
         parts = []
         for part in body:
             if isinstance(part, dict):
@@ -173,8 +188,21 @@ def _normalize(msg: dict) -> dict:
             elif isinstance(part, str):
                 parts.append(part)
         text = "".join(parts)
+    elif isinstance(body, dict):
+        text = str(_first(body.get("msg"), body.get("text"), "") or "")
     if not text:
         text = str(_first(msg.get("content"), msg.get("text"), "") or "")
+
+    ext = msg.get("extInfo")
+    if isinstance(ext, str):
+        try:
+            ext = json.loads(ext)
+        except Exception:
+            ext = {}
+    if not isinstance(ext, dict):
+        ext = {}
+    user = ext.get("user") or msg.get("user") or msg.get("userInfo") or {}
+
     return {
         "id": str(_first(msg.get("msgIdClient"), msg.get("msgidClient"),
                          msg.get("msgId"), "") or ""),
@@ -186,7 +214,7 @@ def _normalize(msg: dict) -> dict:
             "id": str(_first(user.get("userId"), user.get("id"), user.get("uid"), "") or ""),
             "name": str(_first(user.get("nickName"), user.get("nickname"),
                                user.get("name"), "") or ""),
-            "avatar": str(_first(user.get("avatar"), user.get("userAvatar"), "") or ""),
+            "avatar": _media(_first(user.get("avatar"), user.get("userAvatar"), "")),
             "level": user.get("level") or 0,
         },
     }
