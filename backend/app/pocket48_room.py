@@ -305,7 +305,7 @@ def all_members() -> dict:
             "user_id": user_id,
             "team": str(star.get("teamName") or "").strip(),
             "group": str(star.get("groupName") or "").strip(),
-            "avatar": str(star.get("avatar") or ""),
+            "avatar": _media(star.get("avatar") or ""),
         }
     _members_cache["data"] = mapping
     _members_cache["ts"] = now
@@ -334,6 +334,7 @@ def oshi_rooms(roster_path: str) -> list:
             "group": info.get("group") or "",
             "team": info.get("team") or "",
             "user_id": user_id,
+            "avatar": info.get("avatar") or "",
             "room_available": bool(user_id),
         })
     return result

@@ -475,15 +475,23 @@
                     <div class="space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
                         <button v-for="room in oshiRooms" :key="room.name"
                                 @click="selectOshiRoom(room)"
-                                class="w-full text-left px-3 py-2 rounded-xl border transition"
+                                class="w-full text-left px-3 py-2.5 rounded-xl border transition"
                                 :class="selectedRoom && selectedRoom.name === room.name
                                     ? 'bg-rose-50 border-rose-200'
                                     : 'bg-white border-transparent hover:bg-slate-50'">
-                            <div class="flex items-center justify-between gap-2">
-                                <span class="text-sm font-semibold text-slate-700">{{ room.name }}</span>
-                                <span class="text-[10px] text-slate-400">{{ room.team || room.group }}</span>
+                            <div class="flex items-center gap-3 w-full">
+                                <img v-if="room.avatar" :src="room.avatar" :alt="room.name"
+                                     class="w-10 h-10 rounded-full object-cover bg-slate-100 shrink-0">
+                                <div v-else class="w-10 h-10 rounded-full bg-slate-100 shrink-0 flex items-center justify-center text-sm font-bold text-slate-400">
+                                    {{ room.name ? room.name.slice(-1) : '?' }}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-bold text-slate-800 truncate">{{ room.group ? room.group + '-' : '' }}{{ room.name }}</p>
+                                    <span v-if="room.team" class="inline-block mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                          :style="teamBadgeStyle(room.team)">{{ teamLabel(room.team) }}</span>
+                                    <span v-if="!room.room_available" class="ml-1 text-[10px] text-slate-400">未绑定房间</span>
+                                </div>
                             </div>
-                            <span v-if="!room.room_available" class="text-[10px] text-slate-400">未绑定口袋房间</span>
                         </button>
                         <p v-if="!oshiLoading && oshiRooms.length === 0" class="text-xs text-slate-400 px-2 py-4">
                             还没有设置特别关心成员
@@ -493,9 +501,13 @@
 
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[70vh]">
                     <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                            <p class="text-sm font-bold text-slate-800">{{ selectedRoom ? selectedRoom.name : '口袋房间' }}</p>
-                            <p class="text-[10px] text-slate-400">{{ selectedRoom ? (selectedRoom.team || selectedRoom.group || '') : '从左侧选择成员' }}</p>
+                        <div class="flex items-center gap-2">
+                            <p class="text-sm font-bold text-slate-800">
+                                {{ selectedRoom ? (selectedRoom.group ? selectedRoom.group + '-' : '') + selectedRoom.name : '口袋房间' }}
+                            </p>
+                            <span v-if="selectedRoom && selectedRoom.team"
+                                  class="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                                  :style="teamBadgeStyle(selectedRoom.team)">{{ teamLabel(selectedRoom.team) }}</span>
                         </div>
                         <div v-if="selectedRoom" class="flex items-center gap-1">
                             <button @click="setOshiScope('all')"
@@ -1368,6 +1380,23 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                         month: '2-digit', day: '2-digit',
                         hour: '2-digit', minute: '2-digit',
                     });
+                };
+                const teamLabel = (team) => {
+                    const text = String(team || '').trim();
+                    return text ? text.replace(/^TEAM\s+/i, '') : '';
+                };
+                const teamBadgeStyle = (team) => {
+                    const key = teamLabel(team).toUpperCase();
+                    const palette = {
+                        'SII': ['#e0f7fa', '#00838f'],
+                        'HII': ['#fff3e0', '#e65100'],
+                        'NII': ['#f3e5f5', '#7b1fa2'],
+                        'X': ['#f1f8e9', '#33691e'],
+                        '预备生': ['#eceff1', '#546e7a'],
+                        'C': ['#fffde7', '#f9a825'],
+                    };
+                    const colors = palette[key] || ['#f1f5f9', '#475569'];
+                    return { backgroundColor: colors[0], color: colors[1] };
                 };
                 const stopOshiPoll = () => {
                     if (oshiPoll) {
@@ -2277,6 +2306,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     danmakuMessages, danmakuError,
                     oshiRooms, oshiLoading, oshiError, selectedRoom, oshiMessages, oshiScope,
                     fetchOshiRooms, selectOshiRoom, setOshiScope, formatRoomTime,
+                    teamLabel, teamBadgeStyle,
                     groups, activeTab, isSavingConfig, selectTab, loadGroups,
                     activeGroupCode, activeGroup, activeGroupTeams,
                     groupConfigs, testingNotify, testingEmby, savingGroups, showEmbyKey,
