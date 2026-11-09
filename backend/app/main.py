@@ -10,6 +10,7 @@ import group_config
 import crond
 import maintenance
 import pocket48_live
+import pocket48_room
 from emby_client import EmbyClient
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
@@ -781,6 +782,43 @@ def pocket48_segment(live_id: str, segment: str):
         raise HTTPException(status_code=404, detail="分片不存在")
     return FileResponse(path, media_type="video/mp2t",
                         headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/pocket48/config")
+def pocket48_get_config():
+    config = pocket48_room.load_config()
+    return {
+        "configured": bool(str(config.get("token") or "").strip()),
+        "has_pa": bool(str(config.get("pa") or "").strip()),
+    }
+
+
+@app.post("/api/pocket48/config")
+def pocket48_save_config(payload: dict):
+    config = pocket48_room.load_config()
+    token = str((payload or {}).get("token") or "").strip()
+    pa = str((payload or {}).get("pa") or "").strip()
+    if token:
+        config["token"] = token
+    if pa:
+        config["pa"] = pa
+    pocket48_room.save_config(config)
+    return {"ok": True, "message": "口袋48 登录信息已保存"}
+
+
+@app.get("/api/pocket48/room/{user_id}/messages")
+def pocket48_room_messages(user_id: str, scope: str = "all",
+                           next_time: int = 0, limit: int = 20):
+    if not re.fullmatch(r"\d+", user_id):
+        raise HTTPException(status_code=400, detail="无效的成员 ID")
+    try:
+        result = pocket48_room.fetch_room_messages(
+            user_id, scope=scope, next_time=next_time,
+            limit=min(max(int(limit), 1), 50),
+        )
+        return {"ok": True, **result}
+    except Exception as exc:
+        return {"ok": False, "items": [], "message": str(exc)}
 
 
 @app.get("/api/emby_status")

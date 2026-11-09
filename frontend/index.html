@@ -441,6 +441,20 @@
                         </div>
                     </div>
                     <div v-if="pocketPlayerMessage" class="px-4 py-2 text-xs text-rose-300 bg-rose-950/40">{{ pocketPlayerMessage }}</div>
+                    <div class="border-t border-slate-800 bg-slate-950 px-4 py-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs font-semibold text-slate-300">房间留言</span>
+                            <button @click="fetchRoomMessages" class="text-[11px] text-slate-400 hover:text-slate-200">刷新</button>
+                        </div>
+                        <div v-if="roomError" class="text-[11px] text-rose-400">{{ roomError }}</div>
+                        <div v-else-if="roomMessages.length === 0" class="text-[11px] text-slate-500">暂无留言（需要配置口袋48 token）</div>
+                        <div v-else class="max-h-32 overflow-y-auto no-scrollbar space-y-1">
+                            <div v-for="msg in roomMessages" :key="msg.id || (msg.user.id + msg.time)" class="text-[11px] leading-5">
+                                <span class="text-sky-400">{{ msg.user.name || '成员' }}：</span>
+                                <span class="text-slate-200">{{ msg.text }}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -761,6 +775,36 @@
                     </p>
                 </div>
 
+                <!-- 口袋48 登录 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 0121 9z"></path></svg>
+                            <h2 class="text-lg font-bold text-slate-800">口袋48 登录</h2>
+                        </div>
+                        <span class="text-xs px-2.5 py-1 rounded-full border"
+                              :class="pocketConfigured ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-500 border-slate-200'">
+                            {{ pocketConfigured ? '已配置' : '未配置' }}
+                        </span>
+                    </div>
+                    <label class="text-xs font-semibold text-slate-500 mb-1 block">Token（房间留言 / 弹幕只读）</label>
+                    <input type="password" v-model="pocketToken" placeholder="从口袋48 APP 抓包获取的 token"
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-rose-300">
+                    <label class="text-xs font-semibold text-slate-500 mt-3 mb-1 block">pa（可选）</label>
+                    <input type="text" v-model="pocketPa" :placeholder="pocketHasPa ? '已配置，留空则不修改' : '接口提示风控时填写抓包中的 pa'"
+                           class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono outline-none focus:ring-2 focus:ring-rose-300">
+                    <div class="flex items-center gap-2 mt-3">
+                        <button @click="savePocketConfig" :disabled="pocketSaving"
+                                class="bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white font-semibold px-4 py-2 rounded-lg text-sm transition">
+                            {{ pocketSaving ? '保存中...' : '保存登录信息' }}
+                        </button>
+                        <span class="text-xs" :class="pocketConfigMsg.startsWith('保存失败') || pocketConfigMsg === '请填写 token' ? 'text-red-500' : 'text-green-600'">{{ pocketConfigMsg }}</span>
+                    </div>
+                    <p class="text-xs text-slate-400 mt-2">
+                        token 仅保存在服务器本地（config/pocket48.yaml），不会提交到 Git；建议使用小号。
+                    </p>
+                </div>
+
                 <!-- 分团官方账号与开关 -->
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
                     <div class="flex items-center justify-between mb-4">
@@ -943,6 +987,15 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 const pocketVideo = ref(null);
                 let pocketHls = null;
                 let pocketPoll = null;
+                const pocketToken = ref('');
+                const pocketPa = ref('');
+                const pocketConfigured = ref(false);
+                const pocketHasPa = ref(false);
+                const pocketSaving = ref(false);
+                const pocketConfigMsg = ref('');
+                const roomMessages = ref([]);
+                const roomError = ref('');
+                let roomPoll = null;
 
                 const pocketUpdatedText = computed(() => pocketUpdatedAt.value
                     ? new Date(pocketUpdatedAt.value * 1000).toLocaleTimeString('zh-CN', {
@@ -978,6 +1031,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     }
                 };
                 const closePocketLive = () => {
+                    stopRoomPoll();
                     if (pocketHls) {
                         pocketHls.destroy();
                         pocketHls = null;
@@ -991,11 +1045,79 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     pocketPlayerLoading.value = false;
                     pocketPlayerMessage.value = '';
                 };
+                const fetchPocketConfig = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/config`);
+                        const data = await res.json();
+                        pocketConfigured.value = !!data.configured;
+                        pocketHasPa.value = !!data.has_pa;
+                    } catch (e) {}
+                };
+                const savePocketConfig = async () => {
+                    const token = pocketToken.value.trim();
+                    if (!token) {
+                        pocketConfigMsg.value = '请填写 token';
+                        return;
+                    }
+                    pocketSaving.value = true;
+                    pocketConfigMsg.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/config`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ token, pa: pocketPa.value.trim() }),
+                        });
+                        const data = await res.json();
+                        pocketConfigMsg.value = data.message || '已保存';
+                        pocketToken.value = '';
+                        pocketConfigured.value = true;
+                        pocketHasPa.value = pocketHasPa.value || !!pocketPa.value.trim();
+                        pocketPa.value = '';
+                    } catch (e) {
+                        pocketConfigMsg.value = '保存失败：' + e;
+                    } finally {
+                        pocketSaving.value = false;
+                    }
+                };
+                const stopRoomPoll = () => {
+                    if (roomPoll) {
+                        clearInterval(roomPoll);
+                        roomPoll = null;
+                    }
+                    roomMessages.value = [];
+                    roomError.value = '';
+                };
+                const fetchRoomMessages = async () => {
+                    const live = pocketPlayer.value;
+                    if (!live) return;
+                    const userId = live.member && live.member.user_id;
+                    if (!userId) return;
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/room/${userId}/messages?scope=all&limit=30`);
+                        const data = await res.json();
+                        if (!data.ok) {
+                            roomError.value = data.message || '获取房间留言失败';
+                            return;
+                        }
+                        roomError.value = '';
+                        roomMessages.value = (data.items || [])
+                            .slice()
+                            .sort((a, b) => (a.time || 0) - (b.time || 0));
+                    } catch (e) {
+                        roomError.value = '获取房间留言失败：' + e;
+                    }
+                };
+                const startRoomPoll = () => {
+                    stopRoomPoll();
+                    fetchRoomMessages();
+                    roomPoll = setInterval(fetchRoomMessages, 5000);
+                };
                 const openPocketLive = async (live) => {
                     closePocketLive();
                     pocketPlayer.value = live;
                     pocketPlayerLoading.value = true;
                     pocketPlayerMessage.value = '';
+                    startRoomPoll();
                     await nextTick();
                     const video = pocketVideo.value;
                     if (!video) return;
@@ -1771,6 +1893,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     fetchUploadStats();
                     uploadPoll = setInterval(fetchUploadStats, 15000);
                     fetchPocketLives();
+                    fetchPocketConfig();
                     pocketPoll = setInterval(() => {
                         if (activeTab.value === 'pocket') fetchPocketLives();
                     }, 60000);
@@ -1793,6 +1916,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     if(uploadPoll) clearInterval(uploadPoll);
                     if(schedulePoll) clearInterval(schedulePoll);
                     if(pocketPoll) clearInterval(pocketPoll);
+                    if(roomPoll) clearInterval(roomPoll);
                 });
 
                 watch(selectedDate, () => {
@@ -1820,6 +1944,8 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     pocketLives, pocketLoading, pocketUpdatedAt, pocketUpdatedText, pocketMessage,
                     pocketPlayer, pocketPlayerLoading, pocketPlayerMessage, pocketVideo,
                     fetchPocketLives, openPocketLive, closePocketLive, pocketLiveDuration,
+                    pocketToken, pocketPa, pocketConfigured, pocketHasPa, pocketSaving, pocketConfigMsg,
+                    roomMessages, roomError, fetchPocketConfig, savePocketConfig, fetchRoomMessages,
                     groups, activeTab, isSavingConfig, selectTab, loadGroups,
                     activeGroupCode, activeGroup, activeGroupTeams,
                     groupConfigs, testingNotify, testingEmby, savingGroups, showEmbyKey,
