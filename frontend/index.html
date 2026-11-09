@@ -133,7 +133,7 @@
                         <h2 class="text-lg font-bold text-slate-800">星梦剧院公演日历</h2>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8">
+                    <div class="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-8 items-stretch">
                     <div>
                     <div class="flex justify-between items-center mb-2 px-1">
                         <button @click="changeMonth(-1)" class="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors">
@@ -158,13 +158,13 @@
                     </div>
                     </div>
 
-                    <div class="lg:border-l lg:border-slate-100 lg:pl-8">
+                    <div class="lg:border-l lg:border-slate-100 lg:pl-8 flex flex-col">
                         <div class="flex items-center justify-between mb-2">
                             <span class="text-xs font-bold text-slate-500">{{ selectedDate }} 排期安排</span>
                         </div>
-                        <div v-if="scheduleMap[selectedDate] && scheduleMap[selectedDate].length > 0" class="grid grid-cols-1 2xl:grid-cols-2 gap-2 max-h-80 overflow-y-auto no-scrollbar">
-                            <div class="flex items-stretch gap-2" v-for="show in scheduleMap[selectedDate]" :key="show.id">
-                                <a :href="show.link" target="_blank" class="flex-1 block bg-slate-50 hover:bg-orange-50 border border-slate-100 p-2.5 rounded-lg transition-colors group">
+                        <div v-if="scheduleMap[selectedDate] && scheduleMap[selectedDate].length > 0" class="grid grid-cols-1 2xl:grid-cols-2 gap-2 flex-1 min-h-0 overflow-y-auto no-scrollbar">
+                            <div class="flex items-stretch gap-2 h-full" v-for="show in scheduleMap[selectedDate]" :key="show.id">
+                                <a :href="show.link" target="_blank" class="flex-1 flex flex-col justify-center bg-slate-50 hover:bg-orange-50 border border-slate-100 p-2.5 rounded-lg transition-colors group">
                                     <div class="flex justify-between items-start mb-1">
                                         <span class="text-xs font-mono font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">{{ show.show_time }}</span>
                                         <span class="text-[10px] text-slate-400 group-hover:text-orange-500 transition-colors">票务</span>
@@ -197,7 +197,7 @@
                                 </button>
                             </div>
                         </div>
-                        <div v-else class="text-center py-4 text-xs text-slate-400 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
+                        <div v-else class="flex-1 flex items-center justify-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-slate-100 border-dashed">
                             当日无公演安排
                         </div>
                     </div>
