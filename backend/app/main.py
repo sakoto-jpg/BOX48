@@ -841,6 +841,14 @@ def pocket48_room_messages(user_id: str, scope: str = "all",
         return {"ok": False, "items": [], "message": str(exc)}
 
 
+@app.get("/api/pocket48/oshi-rooms")
+def pocket48_oshi_rooms():
+    try:
+        return {"ok": True, "items": pocket48_room.oshi_rooms(CONFIG_PATH)}
+    except Exception as exc:
+        return {"ok": False, "items": [], "message": str(exc)}
+
+
 @app.get("/api/pocket48/danmaku/{live_id}")
 def pocket48_danmaku_messages(live_id: str, since: int = 0):
     if not re.fullmatch(r"\d+", live_id):

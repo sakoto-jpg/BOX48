@@ -12,12 +12,14 @@ import json
 import os
 import re
 import secrets
+import time
 
 import requests
 import yaml
 
 BASE = "https://pocketapi.48.cn"
 CONFIG_PATH = os.environ.get("POCKET48_CONFIG_PATH", "/config/pocket48.yaml")
+_members_cache = {"data": None, "ts": 0.0}
 
 # 2021 年签名，参考实现实测服务端不拦截；无需 WASM 动态生成
 POCKET_PA = (
@@ -249,3 +251,56 @@ def fetch_room_messages(user_id: str, scope: str = "all",
     server_id, channel_id = resolve_channel(token, user_id, pa)
     return list_messages(token, server_id, channel_id,
                          scope=scope, next_time=next_time, limit=limit, pa=pa)
+
+
+def all_members() -> dict:
+    now = time.time()
+    if _members_cache["data"] is not None and now - _members_cache["ts"] < 3600:
+        return _members_cache["data"]
+    token = str(load_config().get("token") or "").strip()
+    if not token:
+        raise RuntimeError("尚未配置口袋48 token")
+    data = _post("/user/api/v1/client/update/group_team_star", {}, token)
+    content = data.get("content") or {}
+    mapping = {}
+    for star in content.get("starInfo") or []:
+        name = str(star.get("realName") or star.get("nickname") or "").strip()
+        user_id = str(star.get("userId") or "").strip()
+        if not name or not user_id:
+            continue
+        mapping[name] = {
+            "user_id": user_id,
+            "team": str(star.get("teamName") or "").strip(),
+            "group": str(star.get("groupName") or "").strip(),
+            "avatar": str(star.get("avatar") or ""),
+        }
+    _members_cache["data"] = mapping
+    _members_cache["ts"] = now
+    return mapping
+
+
+def oshi_rooms(roster_path: str) -> list:
+    try:
+        with open(roster_path, encoding="utf-8") as fh:
+            roster = yaml.safe_load(fh) or {}
+    except Exception:
+        roster = {}
+    names = []
+    for team in roster.get("teams") or []:
+        for name in team.get("oshis") or []:
+            name = str(name).strip()
+            if name and name not in names:
+                names.append(name)
+    mapping = all_members()
+    result = []
+    for name in names:
+        info = mapping.get(name) or {}
+        user_id = str(info.get("user_id") or "")
+        result.append({
+            "name": name,
+            "group": info.get("group") or "",
+            "team": info.get("team") or "",
+            "user_id": user_id,
+            "room_available": bool(user_id),
+        })
+    return result

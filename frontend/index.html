@@ -95,6 +95,8 @@
                     </button>
                     <button @click="selectTab('pocket')" class="tab-button"
                             :class="{ 'tab-active': activeTab === 'pocket' }">口袋直播</button>
+                    <button @click="selectTab('rooms')" class="tab-button"
+                            :class="{ 'tab-active': activeTab === 'rooms' }">口袋房间</button>
                     <button @click="selectTab('queue')" class="tab-button"
                             :class="{ 'tab-active': activeTab === 'queue' }">下载队列</button>
                     <button @click="selectTab('settings')" class="tab-button"
@@ -453,6 +455,67 @@
                             </div>
                             <div v-if="danmakuMessages.length === 0" class="text-[11px] text-slate-500">{{ danmakuError || '等待弹幕...' }}</div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div data-panel="rooms" v-show="activeTab === 'rooms'">
+            <div class="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-3">
+                    <div class="flex items-center justify-between px-1 mb-3">
+                        <div>
+                            <h2 class="text-base font-bold text-slate-800">特别关注</h2>
+                            <p class="text-[10px] text-slate-400">{{ oshiRooms.length }} 位成员</p>
+                        </div>
+                        <button @click="fetchOshiRooms" :disabled="oshiLoading"
+                                class="text-xs text-slate-400 hover:text-slate-600">
+                            {{ oshiLoading ? '刷新中...' : '刷新' }}
+                        </button>
+                    </div>
+                    <div class="space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
+                        <button v-for="room in oshiRooms" :key="room.name"
+                                @click="selectOshiRoom(room)"
+                                class="w-full text-left px-3 py-2 rounded-xl border transition"
+                                :class="selectedRoom && selectedRoom.name === room.name
+                                    ? 'bg-rose-50 border-rose-200'
+                                    : 'bg-white border-transparent hover:bg-slate-50'">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-sm font-semibold text-slate-700">{{ room.name }}</span>
+                                <span class="text-[10px] text-slate-400">{{ room.team || room.group }}</span>
+                            </div>
+                            <span v-if="!room.room_available" class="text-[10px] text-slate-400">未绑定口袋房间</span>
+                        </button>
+                        <p v-if="!oshiLoading && oshiRooms.length === 0" class="text-xs text-slate-400 px-2 py-4">
+                            还没有设置特别关心成员
+                        </p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[70vh]">
+                    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">{{ selectedRoom ? selectedRoom.name : '口袋房间' }}</p>
+                            <p class="text-[10px] text-slate-400">{{ selectedRoom ? (selectedRoom.team || selectedRoom.group || '') : '从左侧选择成员' }}</p>
+                        </div>
+                        <span v-if="selectedRoom" class="text-[10px] text-slate-400">每 5 秒刷新</span>
+                    </div>
+                    <div data-oshi-chat class="flex-1 overflow-y-auto p-4 bg-slate-50 space-y-3">
+                        <div v-if="!selectedRoom" class="h-full flex items-center justify-center text-sm text-slate-400">从左侧选择一位特别关心成员</div>
+                        <div v-else-if="oshiError" class="text-sm text-rose-500">{{ oshiError }}</div>
+                        <template v-else>
+                            <div v-for="msg in oshiMessages" :key="msg.id" class="flex gap-2">
+                                <img v-if="msg.user.avatar" :src="msg.user.avatar" class="w-8 h-8 rounded-full object-cover bg-slate-200 shrink-0">
+                                <div v-else class="w-8 h-8 rounded-full bg-slate-200 shrink-0"></div>
+                                <div class="min-w-0">
+                                    <div class="text-[11px] text-slate-400">
+                                        {{ msg.user.name || '成员' }}<span v-if="msg.user.level" class="ml-1">Lv.{{ msg.user.level }}</span>
+                                        <span class="ml-2">{{ formatRoomTime(msg.time) }}</span>
+                                    </div>
+                                    <div class="text-sm text-slate-700 bg-white rounded-lg px-3 py-2 border border-slate-100 mt-0.5 break-words">{{ msg.text }}</div>
+                                </div>
+                            </div>
+                            <div v-if="oshiMessages.length === 0" class="text-center text-sm text-slate-400 py-10">暂无留言</div>
+                        </template>
                     </div>
                 </div>
             </div>
@@ -985,7 +1048,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 let pollInterval = null;
                 let embyPoll = null;
 
-                const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['pocket', 'queue', 'settings']);
+                const tabKeys = () => groups.value.map(g => 'group-' + g.code).concat(['pocket', 'rooms', 'queue', 'settings']);
 
                 // 当前分团代码（标签页决定），用于把各卡片的数据限定在本分团
                 const activeGroupCode = computed(() =>
@@ -1025,6 +1088,12 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 const danmakuSeq = ref(0);
                 const danmakuError = ref('');
                 let danmakuPoll = null;
+                const oshiRooms = ref([]);
+                const oshiLoading = ref(false);
+                const oshiError = ref('');
+                const selectedRoom = ref(null);
+                const oshiMessages = ref([]);
+                let oshiPoll = null;
 
                 const pocketUpdatedText = computed(() => pocketUpdatedAt.value
                     ? new Date(pocketUpdatedAt.value * 1000).toLocaleTimeString('zh-CN', {
@@ -1234,6 +1303,73 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     fetchDanmaku();
                     danmakuPoll = setInterval(fetchDanmaku, 2000);
                 };
+                const formatRoomTime = (ts) => {
+                    if (!ts) return '';
+                    return new Date(ts).toLocaleString('zh-CN', {
+                        month: '2-digit', day: '2-digit',
+                        hour: '2-digit', minute: '2-digit',
+                    });
+                };
+                const stopOshiPoll = () => {
+                    if (oshiPoll) {
+                        clearInterval(oshiPoll);
+                        oshiPoll = null;
+                    }
+                };
+                const fetchOshiMessages = async () => {
+                    const room = selectedRoom.value;
+                    if (!room || !room.user_id) return;
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/room/${room.user_id}/messages?scope=all&limit=30`);
+                        const data = await res.json();
+                        if (!data.ok) {
+                            oshiError.value = data.message || '获取房间留言失败';
+                            return;
+                        }
+                        oshiError.value = '';
+                        oshiMessages.value = (data.items || [])
+                            .slice()
+                            .sort((a, b) => (a.time || 0) - (b.time || 0));
+                        await nextTick();
+                        const box = document.querySelector('[data-oshi-chat]');
+                        if (box) box.scrollTop = box.scrollHeight;
+                    } catch (e) {
+                        oshiError.value = '获取房间留言失败：' + e;
+                    }
+                };
+                const selectOshiRoom = (room) => {
+                    stopOshiPoll();
+                    selectedRoom.value = room;
+                    oshiMessages.value = [];
+                    oshiError.value = '';
+                    if (!room.room_available) {
+                        oshiError.value = '该成员没有可用口袋房间';
+                        return;
+                    }
+                    fetchOshiMessages();
+                    oshiPoll = setInterval(fetchOshiMessages, 5000);
+                };
+                const fetchOshiRooms = async () => {
+                    oshiLoading.value = true;
+                    oshiError.value = '';
+                    try {
+                        const res = await fetch(`${API_BASE}/pocket48/oshi-rooms`);
+                        const data = await res.json();
+                        if (!data.ok) {
+                            oshiError.value = data.message || '获取特别关注失败';
+                            return;
+                        }
+                        oshiRooms.value = data.items || [];
+                        if (!selectedRoom.value && oshiRooms.value.length) {
+                            const first = oshiRooms.value.find(r => r.room_available) || oshiRooms.value[0];
+                            selectOshiRoom(first);
+                        }
+                    } catch (e) {
+                        oshiError.value = '获取特别关注失败：' + e;
+                    } finally {
+                        oshiLoading.value = false;
+                    }
+                };
                 const openPocketLive = async (live) => {
                     closePocketLive();
                     pocketPlayer.value = live;
@@ -1275,6 +1411,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                         history.replaceState(null, '', '#/' + key);
                     }
                     if (key === 'pocket') fetchPocketLives();
+                    if (key === 'rooms') fetchOshiRooms();
                 };
 
                 const loadGroups = async () => {
@@ -2040,6 +2177,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     if(pocketPoll) clearInterval(pocketPoll);
                     if(roomPoll) clearInterval(roomPoll);
                     if(danmakuPoll) clearInterval(danmakuPoll);
+                    if(oshiPoll) clearInterval(oshiPoll);
                 });
 
                 watch(selectedDate, () => {
@@ -2072,6 +2210,8 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     sendPocketSms, loginPocket,
                     roomMessages, roomError, fetchPocketConfig, savePocketConfig, fetchRoomMessages,
                     danmakuMessages, danmakuError,
+                    oshiRooms, oshiLoading, oshiError, selectedRoom, oshiMessages,
+                    fetchOshiRooms, selectOshiRoom, formatRoomTime,
                     groups, activeTab, isSavingConfig, selectTab, loadGroups,
                     activeGroupCode, activeGroup, activeGroupTeams,
                     groupConfigs, testingNotify, testingEmby, savingGroups, showEmbyKey,
