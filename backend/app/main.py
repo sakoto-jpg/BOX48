@@ -11,6 +11,7 @@ import crond
 import maintenance
 import pocket48_live
 import pocket48_room
+import pocket48_danmaku
 from emby_client import EmbyClient
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse
@@ -836,6 +837,16 @@ def pocket48_room_messages(user_id: str, scope: str = "all",
             limit=min(max(int(limit), 1), 50),
         )
         return {"ok": True, **result}
+    except Exception as exc:
+        return {"ok": False, "items": [], "message": str(exc)}
+
+
+@app.get("/api/pocket48/danmaku/{live_id}")
+def pocket48_danmaku_messages(live_id: str, since: int = 0):
+    if not re.fullmatch(r"\d+", live_id):
+        raise HTTPException(status_code=400, detail="无效的直播间 ID")
+    try:
+        return {"ok": True, **pocket48_danmaku.poll(live_id, since)}
     except Exception as exc:
         return {"ok": False, "items": [], "message": str(exc)}
 
