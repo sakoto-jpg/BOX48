@@ -51,6 +51,24 @@
             vertical-align: middle;
         }
         .tab-button.tab-disabled { opacity: .55; }
+        @keyframes danmaku-fade-up {
+            0% { opacity: 0; transform: translateY(16px); }
+            10% { opacity: 1; transform: translateY(0); }
+            75% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-24px); }
+        }
+        .danmaku-bubble {
+            animation: danmaku-fade-up 6s ease-out forwards;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, .85);
+            word-break: break-word;
+        }
+        .player-stage:fullscreen {
+            border-radius: 0;
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            max-height: none;
+        }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans selection:bg-pink-200">
@@ -427,34 +445,47 @@
                 </div>
             </div>
 
-            <div v-if="pocketPlayer" class="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-3" @click.self="closePocketLive">
-                <div class="bg-slate-900 rounded-2xl overflow-hidden w-full max-w-4xl shadow-2xl">
-                    <div class="flex items-center justify-between px-4 py-3 gap-3">
-                        <div class="min-w-0">
+            <div v-if="pocketPlayer" class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3" @click.self="closePocketLive">
+                <div ref="pocketPlayerStage" class="player-stage relative bg-black w-full max-w-4xl h-[70vh] max-h-[760px] rounded-2xl overflow-hidden shadow-2xl"
+                     :style="pocketCssFullscreen ? { position: 'fixed', inset: '0', width: '100vw', height: '100vh', maxWidth: 'none', maxHeight: 'none', borderRadius: '0', zIndex: 100 } : null">
+                    <video ref="pocketVideo" autoplay playsinline
+                           class="absolute inset-0 w-full h-full object-contain"
+                           @click="togglePocketPlay"
+                           @play="pocketPlaying = true"
+                           @pause="pocketPlaying = false"></video>
+
+                    <div class="absolute top-0 inset-x-0 p-4 bg-gradient-to-b from-black/75 to-transparent flex items-start justify-between gap-3 pointer-events-none z-10">
+                        <div class="min-w-0 pointer-events-auto">
                             <p class="text-white font-bold truncate">{{ pocketPlayer.title }}</p>
-                            <p class="text-xs text-slate-400 truncate">{{ pocketPlayer.member.star_name || pocketPlayer.member.nickname }} · {{ pocketPlayer.member.group }}</p>
+                            <p class="text-xs text-slate-300 truncate">{{ pocketPlayer.member.star_name || pocketPlayer.member.nickname }} · {{ pocketPlayer.member.group }}</p>
                         </div>
-                        <button @click="closePocketLive" class="shrink-0 text-slate-300 hover:text-white text-xl leading-none">✕</button>
+                        <button @click="closePocketLive" class="pointer-events-auto shrink-0 w-8 h-8 rounded-full bg-black/40 hover:bg-black/60 text-white text-lg leading-none flex items-center justify-center">✕</button>
                     </div>
-                    <div class="relative bg-black h-[65vh] max-h-[720px]">
-                        <video ref="pocketVideo" controls autoplay playsinline class="w-full h-full object-contain"></video>
-                        <div v-if="pocketPlayerLoading" class="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm">
-                            正在连接直播...
+
+                    <div class="absolute inset-x-0 bottom-20 top-24 px-4 flex flex-col justify-end gap-1 overflow-hidden pointer-events-none z-10">
+                        <div v-for="item in danmakuVisible" :key="item._key"
+                             class="danmaku-bubble text-sm text-white leading-6">
+                            <span class="text-sky-300">{{ item.nick || '观众' }}：</span>{{ item.text }}
                         </div>
                     </div>
-                    <div v-if="pocketPlayerMessage" class="px-4 py-2 text-xs text-rose-300 bg-rose-950/40">{{ pocketPlayerMessage }}</div>
-                    <div class="border-t border-slate-800 bg-slate-950 px-4 py-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-semibold text-slate-300">直播弹幕</span>
-                            <span class="text-[10px] text-slate-500">{{ danmakuError || '实时' }}</span>
+
+                    <div v-if="pocketPlayerLoading" class="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm pointer-events-none z-10">
+                        正在连接直播...
+                    </div>
+                    <div v-if="pocketPlayerMessage" class="absolute inset-x-0 top-20 mx-auto max-w-md text-center text-xs text-rose-300 bg-rose-950/70 rounded-lg px-3 py-2 z-10">
+                        {{ pocketPlayerMessage }}
+                    </div>
+
+                    <div class="absolute bottom-0 inset-x-0 px-4 py-3 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-3 z-20">
+                        <button @click="togglePocketPlay" class="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center text-sm transition">
+                            {{ pocketPlaying ? '⏸' : '▶' }}
+                        </button>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[11px] text-slate-300 truncate">{{ danmakuError ? danmakuError : '弹幕 · 实时' }}</p>
                         </div>
-                        <div data-danmaku-box class="max-h-32 overflow-y-auto no-scrollbar space-y-1">
-                            <div v-for="msg in danmakuMessages" :key="msg.seq" class="text-[11px] leading-5">
-                                <span class="text-sky-400">{{ msg.nick || '观众' }}：</span>
-                                <span class="text-slate-200">{{ msg.text }}</span>
-                            </div>
-                            <div v-if="danmakuMessages.length === 0" class="text-[11px] text-slate-500">{{ danmakuError || '等待弹幕...' }}</div>
-                        </div>
+                        <button @click="togglePocketFullscreen" class="px-3 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition">
+                            {{ pocketFullscreen ? '退出全屏' : '全屏' }}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1134,6 +1165,11 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 const danmakuMessages = ref([]);
                 const danmakuSeq = ref(0);
                 const danmakuError = ref('');
+                const danmakuVisible = ref([]);
+                const pocketPlayerStage = ref(null);
+                const pocketFullscreen = ref(false);
+                const pocketCssFullscreen = ref(false);
+                const pocketPlaying = ref(false);
                 let danmakuPoll = null;
                 const oshiRooms = ref([]);
                 const oshiLoading = ref(false);
@@ -1179,6 +1215,13 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 const closePocketLive = () => {
                     stopRoomPoll();
                     stopDanmakuPoll();
+                    danmakuVisible.value = [];
+                    if (document.fullscreenElement) {
+                        document.exitFullscreen().catch(() => {});
+                    }
+                    pocketFullscreen.value = false;
+                    pocketCssFullscreen.value = false;
+                    pocketPlaying.value = false;
                     if (pocketHls) {
                         pocketHls.destroy();
                         pocketHls = null;
@@ -1334,12 +1377,53 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     fetchRoomMessages();
                     roomPoll = setInterval(fetchRoomMessages, 5000);
                 };
+                const pushDanmaku = (msg) => {
+                    const item = {
+                        ...msg,
+                        _key: `${msg.seq || msg.time || Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    };
+                    danmakuVisible.value.push(item);
+                    if (danmakuVisible.value.length > 8) danmakuVisible.value.shift();
+                    setTimeout(() => {
+                        danmakuVisible.value = danmakuVisible.value.filter(x => x._key !== item._key);
+                    }, 6000);
+                };
+                const togglePocketPlay = () => {
+                    const video = pocketVideo.value;
+                    if (!video) return;
+                    if (video.paused) video.play().catch(() => {});
+                    else video.pause();
+                };
+                const updatePocketFullscreen = () => {
+                    pocketFullscreen.value = !!document.fullscreenElement || pocketCssFullscreen.value;
+                };
+                const togglePocketFullscreen = async () => {
+                    const stage = pocketPlayerStage.value;
+                    if (!stage) return;
+                    if (document.fullscreenElement) {
+                        await document.exitFullscreen().catch(() => {});
+                        return;
+                    }
+                    if (pocketCssFullscreen.value) {
+                        pocketCssFullscreen.value = false;
+                        pocketFullscreen.value = false;
+                        return;
+                    }
+                    try {
+                        await stage.requestFullscreen();
+                        pocketFullscreen.value = true;
+                    } catch (e) {
+                        pocketCssFullscreen.value = true;
+                        pocketFullscreen.value = true;
+                    }
+                };
                 const stopDanmakuPoll = () => {
                     if (danmakuPoll) {
                         clearInterval(danmakuPoll);
                         danmakuPoll = null;
                     }
                     danmakuMessages.value = [];
+                    danmakuVisible.value = [];
                     danmakuSeq.value = 0;
                     danmakuError.value = '';
                 };
@@ -1356,15 +1440,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                         danmakuError.value = '';
                         if (data.seq !== undefined) danmakuSeq.value = data.seq;
                         const items = (data.items || []).filter(m => m.type === 'text' && m.text);
-                        if (items.length) {
-                            danmakuMessages.value.push(...items);
-                            if (danmakuMessages.value.length > 120) {
-                                danmakuMessages.value = danmakuMessages.value.slice(-120);
-                            }
-                            await nextTick();
-                            const box = document.querySelector('[data-danmaku-box]');
-                            if (box) box.scrollTop = box.scrollHeight;
-                        }
+                        for (const item of items) pushDanmaku(item);
                     } catch (e) {
                         danmakuError.value = '弹幕连接失败：' + e;
                     }
@@ -2250,6 +2326,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     pocketPoll = setInterval(() => {
                         if (activeTab.value === 'pocket') fetchPocketLives();
                     }, 60000);
+                    document.addEventListener('fullscreenchange', updatePocketFullscreen);
                 });
 
                 // 切换分团标签时，把该分团的数据重新取一遍
@@ -2272,6 +2349,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     if(roomPoll) clearInterval(roomPoll);
                     if(danmakuPoll) clearInterval(danmakuPoll);
                     if(oshiPoll) clearInterval(oshiPoll);
+                    document.removeEventListener('fullscreenchange', updatePocketFullscreen);
                 });
 
                 watch(selectedDate, () => {
@@ -2303,7 +2381,9 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     pocketMobile, pocketSmsCode, pocketSending, pocketLoggingIn, pocketLoginMsg,
                     sendPocketSms, loginPocket,
                     roomMessages, roomError, fetchPocketConfig, savePocketConfig, fetchRoomMessages,
-                    danmakuMessages, danmakuError,
+                    danmakuMessages, danmakuError, danmakuVisible,
+                    pocketPlayerStage, pocketFullscreen, pocketCssFullscreen, pocketPlaying,
+                    togglePocketPlay, togglePocketFullscreen,
                     oshiRooms, oshiLoading, oshiError, selectedRoom, oshiMessages, oshiScope,
                     fetchOshiRooms, selectOshiRoom, setOshiScope, formatRoomTime,
                     teamLabel, teamBadgeStyle,
