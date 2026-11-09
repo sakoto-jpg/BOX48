@@ -806,6 +806,25 @@ def pocket48_save_config(payload: dict):
     return {"ok": True, "message": "口袋48 登录信息已保存"}
 
 
+@app.post("/api/pocket48/login/send")
+def pocket48_send_sms(payload: dict):
+    data = payload or {}
+    try:
+        return pocket48_room.send_sms(data.get("mobile"), data.get("area") or "86")
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)}
+
+
+@app.post("/api/pocket48/login/verify")
+def pocket48_verify_sms(payload: dict):
+    data = payload or {}
+    try:
+        return pocket48_room.login_with_sms(
+            data.get("mobile"), data.get("code"), data.get("area") or "86")
+    except Exception as exc:
+        return {"ok": False, "message": str(exc)}
+
+
 @app.get("/api/pocket48/room/{user_id}/messages")
 def pocket48_room_messages(user_id: str, scope: str = "all",
                            next_time: int = 0, limit: int = 20):

@@ -8,7 +8,10 @@
 token 存放在 /config/pocket48.yaml（config/ 已被 .gitignore 忽略）。
 """
 
+import json
 import os
+import re
+import secrets
 
 import requests
 import yaml
@@ -16,10 +19,19 @@ import yaml
 BASE = "https://pocketapi.48.cn"
 CONFIG_PATH = os.environ.get("POCKET48_CONFIG_PATH", "/config/pocket48.yaml")
 
-APP_INFO = (
-    '{"vendor":"apple","deviceId":"0","appVersion":"6.2.0","appBuild":"200701",'
-    '"osVersion":"14.4.0","osType":"ios","deviceName":"ipad","os":"ios"}'
+# 2021 年签名，参考实现实测服务端不拦截；无需 WASM 动态生成
+POCKET_PA = (
+    "MTYzNjAxNzMxNTAwMCw3NjkyNzVkNTliZWU0MmQ0OGVjOWIyYTMwY2FkOWQzOSw3NzFhY2QwY2Ji"
+    "ZDhkZDUzZDdjZGY3YTcxNGYzNmVlOCwyMDIxMDYwOTAx"
 )
+
+ANDROID_DEVICE = {
+    "model": "MI 8",
+    "osVersion": "10",
+    "brand": "Xiaomi",
+    "buildId": "QP1A.190711.020",
+    "buildTags": "release-keys",
+}
 
 
 def load_config() -> dict:
@@ -38,23 +50,95 @@ def save_config(data: dict) -> None:
     os.replace(tmp, CONFIG_PATH)
 
 
-def _headers(token: str, pa: str = "") -> dict:
+def _device_id(config: dict = None) -> str:
+    config = config if config is not None else load_config()
+    device_id = str(config.get("device_id") or "")
+    if not re.fullmatch(r"[0-9a-f]{16}", device_id):
+        device_id = secrets.token_hex(8)
+        config["device_id"] = device_id
+        save_config(config)
+    return device_id
+
+
+def _headers(token: str = None, pa: str = "", device_id: str = None) -> dict:
+    device_id = device_id or _device_id()
+    device = ANDROID_DEVICE
+    user_agent = (
+        f"PocketFans201807/7.1.44_26092001 ({device['model']}:Android "
+        f"{device['osVersion']};{device['brand']} {device['buildId']} {device['buildTags']})"
+    )
+    app_info = json.dumps({
+        "IMEI": device_id,
+        "appBuild": "26092001",
+        "appName": "pocket48",
+        "appVersion": "7.1.44",
+        "deviceId": device_id,
+        "deviceName": device["model"],
+        "osType": "android",
+        "osVersion": device["osVersion"],
+        "phoneName": device["model"],
+        "phoneSystemVersion": device["osVersion"],
+        "vendor": device["brand"],
+    }, separators=(",", ":"))
     headers = {
-        "Content-Type": "application/json;charset=utf-8",
-        "User-Agent": "PocketFans201807/6.2.0 (iPad; iOS 14.4; Scale/2.00)",
-        "appInfo": APP_INFO,
-        "token": token,
+        "Content-Type": "application/json; charset=UTF-8",
+        "User-Agent": user_agent,
+        "appInfo": app_info,
+        "Accept-Language": "zh-Hans-CN;q=1",
+        "pa": pa or POCKET_PA,
     }
-    if pa:
-        headers["pa"] = pa
+    if token:
+        headers["token"] = token
     return headers
 
 
-def _post(path: str, payload: dict, token: str, pa: str = "") -> dict:
+def _post(path: str, payload: dict, token: str = None, pa: str = "") -> dict:
     resp = requests.post(BASE + path, json=payload,
                          headers=_headers(token, pa), timeout=20)
     resp.raise_for_status()
     return resp.json()
+
+
+def send_sms(mobile: str, area: str = "86") -> dict:
+    mobile = str(mobile or "").strip()
+    if not re.fullmatch(r"\d{6,15}", mobile):
+        raise RuntimeError("手机号格式不正确")
+    data = _post("/user/api/v2/sms/send_sms", {
+        "mobile": mobile,
+        "area": str(area or "86"),
+        "businessCode": 1,
+        "intelligenceToken": "",
+    })
+    if data.get("status") == 2001:
+        raise RuntimeError(data.get("message") or "需要完成人机验证，请在官方 APP 内登录")
+    if not data.get("success"):
+        raise RuntimeError(data.get("message") or "发送验证码失败")
+    return {"ok": True, "message": "验证码已发送"}
+
+
+def login_with_sms(mobile: str, code: str, area: str = "86") -> dict:
+    mobile = str(mobile or "").strip()
+    code = str(code or "").strip()
+    if not mobile or not code:
+        raise RuntimeError("手机号与验证码不能为空")
+    config = load_config()
+    device_id = _device_id(config)
+    resp = requests.post(BASE + "/user/api/v2/login/app/app_login", json={
+        "mobileCodeLogin": {"mobile": mobile, "code": code,
+                            "area": str(area or "86")},
+        "loginType": "MOBILE_SMS_CODE",
+        "deviceToken": "",
+    }, headers=_headers(device_id=device_id), timeout=20)
+    resp.raise_for_status()
+    data = resp.json()
+    token = (data.get("content") or {}).get("token")
+    if not token:
+        raise RuntimeError(data.get("message") or "登录失败")
+    config["token"] = token
+    config["mobile"] = mobile
+    config["area"] = str(area or "86")
+    save_config(config)
+    return {"ok": True, "message": "登录成功", "configured": True}
 
 
 def resolve_channel(token: str, user_id: str, pa: str = ""):
