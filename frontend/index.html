@@ -1177,7 +1177,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                 const oshiError = ref('');
                 const selectedRoom = ref(null);
                 const oshiMessages = ref([]);
-                const oshiScope = ref('all');
+                const oshiScope = ref('homeowner');
                 let oshiPoll = null;
 
                 const pocketUpdatedText = computed(() => pocketUpdatedAt.value
