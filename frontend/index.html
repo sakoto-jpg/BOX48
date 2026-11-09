@@ -540,7 +540,10 @@
                                             </div>
                                         </template>
                                         <template v-else-if="msg.kind === 'live'">
-                                            <span class="inline-flex items-center gap-1 text-rose-600 font-medium">📺 正在直播：{{ msg.live_title }}</span>
+                                            <button @click="openLiveFromMessage(msg)"
+                                                    class="inline-flex items-center gap-1 text-rose-600 font-medium hover:text-rose-700 hover:underline transition">
+                                                📺 正在直播：{{ msg.live_title }}
+                                            </button>
                                         </template>
                                         <template v-else>{{ msg.text || ('[' + msg.type + ']') }}</template>
                                     </div>
@@ -1176,6 +1179,29 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     pocketPlayer.value = null;
                     pocketPlayerLoading.value = false;
                     pocketPlayerMessage.value = '';
+                };
+                const openLiveFromMessage = async (msg) => {
+                    if (!msg || !msg.live_id) return;
+                    let live = pocketLives.value.find(item => item.live_id === msg.live_id);
+                    if (!live) {
+                        live = {
+                            live_id: msg.live_id,
+                            title: msg.live_title || '直播中',
+                            cover_url: msg.live_cover || '',
+                            member: {
+                                user_id: msg.user && msg.user.id ? msg.user.id : '',
+                                star_name: msg.user && msg.user.name ? msg.user.name : '',
+                                nickname: msg.user && msg.user.name ? msg.user.name : '',
+                                group: '',
+                            },
+                            online_num: 0,
+                            start_time: 0,
+                            live_type: 1,
+                        };
+                    }
+                    selectTab('pocket');
+                    await nextTick();
+                    openPocketLive(live);
                 };
                 const fetchPocketConfig = async () => {
                     try {
@@ -2243,7 +2269,7 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                     searchUploads, loadMoreUploads, formatDuration, runUploadAction, downloadSingleBv,
                     pocketLives, pocketLoading, pocketUpdatedAt, pocketUpdatedText, pocketMessage,
                     pocketPlayer, pocketPlayerLoading, pocketPlayerMessage, pocketVideo,
-                    fetchPocketLives, openPocketLive, closePocketLive, pocketLiveDuration,
+                    fetchPocketLives, openPocketLive, closePocketLive, openLiveFromMessage, pocketLiveDuration,
                     pocketToken, pocketPa, pocketConfigured, pocketHasPa, pocketSaving, pocketConfigMsg,
                     pocketMobile, pocketSmsCode, pocketSending, pocketLoggingIn, pocketLoginMsg,
                     sendPocketSms, loginPocket,
