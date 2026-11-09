@@ -164,24 +164,24 @@
                         </div>
                         <div v-if="scheduleMap[selectedDate] && scheduleMap[selectedDate].length > 0" class="grid grid-cols-1 2xl:grid-cols-2 gap-2 flex-1 min-h-0 overflow-y-auto no-scrollbar">
                             <div class="flex items-stretch gap-2 h-full" v-for="show in scheduleMap[selectedDate]" :key="show.id">
-                                <a :href="show.link" target="_blank" class="flex-1 flex flex-col justify-center bg-slate-50 hover:bg-orange-50 border border-slate-100 p-2.5 rounded-lg transition-colors group">
-                                    <div class="flex justify-between items-start mb-1">
-                                        <span class="text-xs font-mono font-bold text-orange-600 bg-orange-100 px-1.5 py-0.5 rounded">{{ show.show_time }}</span>
-                                        <span class="text-[10px] text-slate-400 group-hover:text-orange-500 transition-colors">票务</span>
+                                <a :href="show.link" target="_blank" class="flex-1 flex flex-col justify-between bg-slate-50 hover:bg-orange-50 border border-slate-100 p-5 rounded-lg transition-colors group">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-base font-mono font-bold text-orange-600 bg-orange-100 px-3 py-1.5 rounded-lg">{{ show.show_time }}</span>
+                                        <span class="text-xs text-slate-400 group-hover:text-orange-500 transition-colors">票务</span>
                                     </div>
-                                    <p class="text-xs font-bold text-slate-700 line-clamp-2 leading-tight">{{ show.title }}</p>
-                                    <div class="flex flex-wrap items-center gap-1 mt-1.5">
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded border"
+                                    <p class="text-base font-bold text-slate-700 line-clamp-3 leading-relaxed py-4">{{ show.title }}</p>
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="text-xs px-2 py-1 rounded border"
                                               :class="scheduleStatusOf(show) && scheduleStatusOf(show).uploaded ? 'bg-blue-50 text-blue-600 border-blue-200' : 'bg-slate-100 text-slate-400 border-slate-200'">
                                             {{ scheduleStatusOf(show) && scheduleStatusOf(show).uploaded ? '录播已上传' : '录播未上传' }}
                                         </span>
-                                        <span class="text-[10px] px-1.5 py-0.5 rounded border"
+                                        <span class="text-xs px-2 py-1 rounded border"
                                               :class="scheduleStatusOf(show) && scheduleStatusOf(show).downloaded ? 'bg-green-50 text-green-600 border-green-200' : 'bg-slate-100 text-slate-400 border-slate-200'">
                                             {{ scheduleStatusOf(show) && scheduleStatusOf(show).downloaded ? '已入库' + uploadScopeLabel(scheduleStatusOf(show).downloaded_scope) : '未入库' }}
                                         </span>
                                         <button v-if="scheduleStatusOf(show) && scheduleStatusOf(show).uploaded && !scheduleStatusOf(show).downloaded"
                                                 @click.stop.prevent="queueScheduleDownload(show)"
-                                                class="text-[10px] bg-violet-600 hover:bg-violet-700 text-white font-semibold px-2 py-0.5 rounded transition">
+                                                class="text-xs bg-violet-600 hover:bg-violet-700 text-white font-semibold px-3 py-1 rounded transition">
                                             立即入库
                                         </button>
                                     </div>
@@ -190,7 +190,7 @@
                                         class="w-12 flex items-center justify-center rounded-lg border transition-all hover:scale-105 active:scale-95"
                                         :class="config.manual_subs?.includes(show.id) ? 'bg-green-500 border-green-600 text-white shadow-md shadow-green-200' : 'bg-white border-slate-200 text-slate-400 hover:bg-slate-50 hover:text-green-500'" 
                                         :title="config.manual_subs?.includes(show.id) ? '已订阅微信提醒 (点击取消)' : '手动订阅此公演提醒 (特殊公演)'">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path v-if="config.manual_subs?.includes(show.id)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                                         <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                                     </svg>
