@@ -99,51 +99,79 @@ TEAM_CN = {
 
 _TRAINEE_TEAM_NAME = os.environ.get("TRAINEE_TEAM_NAME", "预备生")
 ROSTER_PATH = os.environ.get("ROSTER_PATH", "/config/roster.yaml")
-_trainee_keyword_cache = {"mtime": None, "keywords": []}
+_trainee_keyword_cache = {"mtime": None, "by_group": {}}
 
 
-def _load_trainee_keywords() -> list:
-    """从花名册读取预备生队伍的关键词（与下载器共用 /config/roster.yaml）。"""
+def _load_trainee_keywords(group_code: str = "snh") -> list:
+    """从花名册读取指定分团预备生队伍的关键词（与下载器共用 roster.yaml）。
+
+    按分团分别缓存：GNZ/BEJ 等分团的预备生队伍名称不同，不能复用 SNH
+    的关键词，否则会把别的分团场次误标为预备生。
+    """
+    group_code = group_code or "snh"
     try:
-        mtime = os.path.getmtime(ROSTER_PATH)
+        roster_mtime = os.path.getmtime(ROSTER_PATH)
     except OSError:
         return []
+    try:
+        groups_mtime = os.path.getmtime(group_config.RUNTIME_PATH)
+    except OSError:
+        groups_mtime = None
+    mtime = (roster_mtime, groups_mtime)
     if _trainee_keyword_cache["mtime"] == mtime:
-        return _trainee_keyword_cache["keywords"]
-    keywords = []
+        return _trainee_keyword_cache["by_group"].get(group_code, [])
+    by_group = {}
     try:
         with open(ROSTER_PATH, encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
+        team_groups = {
+            team.get("name"): team.get("group")
+            for team in group_config.teams()
+            if team.get("name")
+        }
         for team in data.get("teams", []):
-            if team.get("name") == _TRAINEE_TEAM_NAME:
-                keywords = [str(k) for k in team.get("keywords", []) if str(k).strip()]
-                break
+            name = str(team.get("name") or "")
+            if "预备生" not in name:
+                continue
+            group = team_groups.get(name)
+            if not group and name == _TRAINEE_TEAM_NAME:
+                group = "snh"
+            if not group:
+                continue
+            by_group[group] = [
+                str(k) for k in team.get("keywords", []) if str(k).strip()
+            ]
     except Exception as exc:
         print(f"⚠️ [Schedule] 读取预备生关键词失败: {exc}", flush=True)
-    _trainee_keyword_cache.update(mtime=mtime, keywords=keywords)
-    return keywords
+    _trainee_keyword_cache.update(mtime=mtime, by_group=by_group)
+    return by_group.get(group_code, [])
 
 
 def _clean_keyword(text: str) -> str:
     return re.sub(r"[《》\s]", "", text or "")
 
 
-def _lookup_def_label(api_date: str, bz: str) -> str:
+def _lookup_def_label(api_date: str, bz: str, group_code: str = "snh") -> str:
     """官方接口对所有非固定队伍场次返回 team=def（含新生公演与拼盘公演）。
 
     判定顺序：
-    1) 同一天存在标题含“新生/预备生”的官方投稿、且剧目名匹配；
+    1) 同一天、**同一分团**存在标题含“新生/预备生”的官方投稿、且剧目名匹配；
     2) 剧目名命中花名册「预备生」队伍的关键词（配置驱动）。
     两者都不满足则不加队伍标签，避免拼盘公演被误标。
+
+    投稿查询必须限定 group_code：不同分团同日可能出现相似剧目标题，
+    否则一个分团的投稿会污染另一个分团的预备生标签（A05）。
     """
     day = (api_date or "")[:10].replace("-", "")
+    group_code = group_code or "snh"
     if day and os.path.exists(SCHEDULE_DB):
         plays = re.findall(r"《([^》]+)》", bz or "")
         try:
             conn = sqlite3.connect(SCHEDULE_DB, timeout=5)
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT title FROM uploads WHERE title LIKE ?", (f"%{day}%",)
+                "SELECT title FROM uploads WHERE group_code = ? AND title LIKE ?",
+                (group_code, f"%{day}%"),
             ).fetchall()
             conn.close()
         except Exception:
@@ -156,9 +184,9 @@ def _lookup_def_label(api_date: str, bz: str) -> str:
                 continue
             return "预备生"
 
-    # 花名册关键词兜底：覆盖“录播尚未上传”的未来场次
+    # 花名册关键词兜底：覆盖“录播尚未上传”的未来场次（按分团取关键词）
     text = _clean_keyword(bz)
-    for keyword in _load_trainee_keywords():
+    for keyword in _load_trainee_keywords(group_code):
         if _clean_keyword(keyword) and _clean_keyword(keyword) in text:
             return "预备生"
     return ""
@@ -238,9 +266,9 @@ def fetch_from_api(month_str, group_code: str = "snh", gid: int = 1):
                 f"-{team_code}-{digest}"
             )
 
-        # def = 非固定队伍场次（新生公演、拼盘公演等）：按同日官方投稿判断是否为预备生
+        # def = 非固定队伍场次（新生公演、拼盘公演等）：按同分团同日投稿判断是否为预备生
         if team_code == "def":
-            team_cn = _lookup_def_label(api_date, bz)
+            team_cn = _lookup_def_label(api_date, bz, group_code)
         else:
             team_cn = TEAM_CN.get(team_code, "")
         if team_cn:

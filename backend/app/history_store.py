@@ -162,9 +162,16 @@ class HistoryStore:
             ).fetchone()
         return row is not None
 
-    def mark_downloaded(self, bvid: str, title: str, codec: str = "",
-                        path: str = "", status: str = "ok", scope: str = "full",
-                        group_code: str = "snh"):
+    def mark_downloaded(self, bvid: str, title: str, group_code: str,
+                        codec: str = "", path: str = "", status: str = "ok",
+                        scope: str = "full"):
+        """登记下载历史。
+
+        group_code 必须由调用方显式传入：持久化层不再静默回退为 snh，
+        避免手动补档其他分团时把分团身份写错（A03）。
+        """
+        if not group_code:
+            raise ValueError("mark_downloaded 需要明确的分团代码，禁止回退为 snh")
         now = datetime.now().isoformat(timespec="seconds")
         file_size = os.path.getsize(path) if path and os.path.exists(path) else None
         codec_source = "probed" if codec else None
@@ -191,7 +198,7 @@ class HistoryStore:
                   updated_at=excluded.updated_at
                 """,
                 (
-                    bvid, group_code or "snh", title, codec or None, path or None,
+                    bvid, group_code, title, codec or None, path or None,
                     scope, status, codec_source,
                     file_size, normalize_team(title, _derive_team(path)),
                     _derive_date(title, path), now, now,

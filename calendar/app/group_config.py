@@ -42,5 +42,9 @@ def groups(path: str = None) -> list:
     return load(path).get("groups", []) or []
 
 
+def teams(path: str = None) -> list:
+    return load(path).get("teams", []) or []
+
+
 def enabled_groups(path: str = None) -> list:
     return [g for g in groups(path) if g.get("enabled", False)]

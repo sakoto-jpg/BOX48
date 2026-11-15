@@ -2,7 +2,6 @@ import os
 import re
 import glob
 import shutil
-import threading
 import yaml
 import requests
 import datetime
@@ -18,6 +17,12 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from apscheduler.schedulers.background import BackgroundScheduler
 from scheduler import Snh48Scanner
+from download_coordinator import (
+    SOURCE_BATCH,
+    SOURCE_MANUAL,
+    DownloadCommand,
+    DownloadCoordinator,
+)
 from team_utils import keyword_hit
 from uploads_api import router as uploads_router
 
@@ -33,12 +38,6 @@ app.add_middleware(
 
 app.include_router(uploads_router, prefix="/api")
 
-# 下载等待队列：只放「还没轮到的任务」，正在下载的那条由 scanner.active_tasks 展示
-download_queue = []
-download_queue_lock = threading.Lock()
-download_run_lock = threading.Lock()   # 同一时间只处理一批，保证下载串行
-download_queue_seq = 0
-
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config/roster.yaml")
 COOKIE_PATH = os.environ.get("COOKIE_PATH", "/cookie/cookie.txt")
 DOWNLOAD_PATH = os.environ.get("DOWNLOAD_PATH", "/downloads")
@@ -46,6 +45,12 @@ NOTIFIED_FILE = "/config/notified.txt"
 POCKET48_NOTIFIED_FILE = "/config/pocket48_notified.txt"
 
 scanner = Snh48Scanner(CONFIG_PATH, COOKIE_PATH, DOWNLOAD_PATH)
+# 所有下载入口统一经协调器：BVID 幂等认领 + 单 worker 串行执行
+coordinator = DownloadCoordinator(
+    runner=scanner.run_download_command,
+    is_downloaded=scanner.is_downloaded,
+)
+scanner.set_coordinator(coordinator)
 scheduler = BackgroundScheduler()
 
 def get_current_config():
@@ -666,34 +671,36 @@ def get_history(group_code: str = ""):
         completed.append(entry)
     return {
         "completed": completed,
-        "active": scanner.active_tasks
+        "active": scanner.active_snapshot()
     }
 
 @app.post("/api/download_specific")
-def download_specific_video(payload: dict, background_tasks: BackgroundTasks):
-    url = payload.get("url")
-    if not url:
+def download_specific_video(payload: dict):
+    match = re.search(r"(BV[0-9A-Za-z]{10})", str((payload or {}).get("url") or ""))
+    if not match:
         return {"message": "未提供有效链接"}
-    background_tasks.add_task(scanner.download_single, url)
+    task = coordinator.submit(DownloadCommand(
+        bvid=match.group(1), source=SOURCE_MANUAL))
+    if task is None:
+        return {"message": "该视频已在下载队列中，未重复投递"}
     return {"message": "指令已投递，系统正在后台解析下载"}
 
 @app.get("/api/download_queue")
 def get_download_queue():
-    with download_queue_lock:
-        queue = list(download_queue)
-    return {"queue": queue, "active": scanner.active_tasks}
+    return {"queue": coordinator.queue_snapshot(),
+            "active": scanner.active_snapshot()}
 
 
 @app.post("/api/download_batch")
-def download_batch(payload: dict, background_tasks: BackgroundTasks):
-    """批量下载 / 批量洗版：按 BV 号依次投递，顺序执行避免并发下载。
+def download_batch(payload: dict):
+    """批量下载 / 批量洗版：按 BV 号投递到统一协调器，串行执行。
 
     payload:
-      bvids: ["BV...", ...]
+      items / bvids: BV 号列表
       scope: 'full' | 'mc'（不传则回退「手动入库」设置）
-      force: true 表示洗版（已入库也重新下载，并清理旧范围版本）
+      force: true 表示洗版（跳过已下载判断，失败时保留旧媒体文件）
+      group: 当前分团代码，贯穿目录、NFO 与下载历史
     """
-    global download_queue_seq
     items = []
     seen = set()
     for item in (payload.get("items") or []):
@@ -715,39 +722,29 @@ def download_batch(payload: dict, background_tasks: BackgroundTasks):
         scope = None
     force = bool(payload.get("force"))
     group_code = str(payload.get("group") or "").strip()
+    # 未知分团代码不往下传，交由工作流按标题/队伍反查，避免写入脏数据
+    if group_code and not group_config.group_by_code(group_code):
+        group_code = ""
 
-    # 提交时整批入队，前端「排队中」才能看到后续任务
-    with download_queue_lock:
-        entries = []
-        for item in items:
-            download_queue_seq += 1
-            entries.append({
-                "id": download_queue_seq,
-                "bvid": item["bvid"],
-                "title": item["title"] or item["bvid"],
-                "scope": scope or "auto",
-                "force": force,
-                "group": group_code,
-            })
-        download_queue.extend(entries)
-
-    def run_batch():
-        # 串行处理：同一时间只跑一批，避免并发下载加剧风控风险
-        with download_run_lock:
-            for entry in entries:
-                # 轮到它了：从等待列表移除（正在下载由 active_tasks 展示，避免重复出现）
-                with download_queue_lock:
-                    download_queue[:] = [q for q in download_queue if q["id"] != entry["id"]]
-                bvid = entry["bvid"]
-                if not entry["force"] and scanner._is_downloaded(bvid):
-                    print(f"⏭️ 批量下载跳过已入库: {bvid}", flush=True)
-                    continue
-                scanner.download_single(f"https://www.bilibili.com/video/{bvid}",
-                                        scope=scope, group_code=entry.get("group"))
-
-    background_tasks.add_task(run_batch)
+    commands = [
+        DownloadCommand(
+            bvid=item["bvid"],
+            source=SOURCE_BATCH,
+            scope=scope,
+            group_code=group_code or None,
+            force=force,
+            preserve_existing=force,   # 洗版失败不得删除已有有效媒体
+            title=item["title"],
+        )
+        for item in items
+    ]
+    accepted, duplicates = coordinator.submit_many(commands)
     label = "洗版" if force else "下载"
-    return {"message": f"已投递 {len(entries)} 个{label}任务，将按顺序处理"}
+    message = f"已投递 {len(accepted)} 个{label}任务，将按顺序处理"
+    if duplicates:
+        message += f"；{len(duplicates)} 个已在队列中，已跳过"
+    return {"message": message, "accepted": len(accepted),
+            "duplicates": len(duplicates)}
 
 
 @app.get("/api/pocket48/lives")

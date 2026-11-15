@@ -1,0 +1,3 @@
+-r backend/requirements.txt
+-r calendar/requirements.txt
+pytest>=7.4
