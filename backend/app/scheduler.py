@@ -134,10 +134,12 @@ class Snh48Scanner:
             status=status, scope=scope
         )
 
-    def _match_team(self, title: str, include_disabled: bool = False) -> str:
+    def _match_team(self, title: str, include_disabled: bool = False,
+                    group_code: str = None) -> str:
         """匹配标题所属队伍。
         include_disabled=True 时也匹配未开启自动入库的队伍（手动入库场景），
         False 时仅匹配已启用队伍（自动入库/自动洗版场景）。
+        group_code 指定时只在该分团的队伍中匹配，避免 GNZ 投稿命中 SNH 同名队伍。
 
         规则：大小写不敏感 + 取「最长命中」的关键词。
         - 大小写不敏感：各分团官号的标题写法不统一（`Team NII` / `TEAM NII`），
@@ -147,6 +149,16 @@ class Snh48Scanner:
         roster = self.nfo_builder.roster
         if include_disabled:
             roster = self.nfo_builder._load_roster(self.config_path, enabled_only=False)
+        if group_code:
+            team_groups = {
+                item.get("name"): item.get("group")
+                for item in group_config.teams()
+                if item.get("name")
+            }
+            roster = {
+                name: data for name, data in roster.items()
+                if team_groups.get(name) == group_code
+            }
         upper_title = (title or "").upper()
         squeezed_title = upper_title.replace(" ", "")
         best = None   # ((关键词长度, -配置顺序), 队伍名)
@@ -652,7 +664,9 @@ class Snh48Scanner:
                     with yt_dlp.YoutubeDL(ydl_opts_full) as ydl_full:
                         v_info = ydl_full.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
                         title = v_info.get('title', '')
-                        target_team = self._match_team(title, include_disabled=include_disabled)
+                        target_team = self._match_team(
+                            title, include_disabled=include_disabled,
+                            group_code=group_code)
                         date_str = _extract_valid_date(title) or v_info.get('upload_date', '')
 
                         if target_team and date_str and re.match(r'^\d{8}$', date_str):
@@ -713,7 +727,9 @@ class Snh48Scanner:
                     v_info = ydl_full.extract_info(f"https://www.bilibili.com/video/{bvid}", download=False)
                     title = v_info.get('title', '')
                     self._update_active(bvid, title=title)
-                    target_team = self._match_team(title, include_disabled=include_disabled)
+                    target_team = self._match_team(
+                        title, include_disabled=include_disabled,
+                        group_code=group_code)
                     # 特殊公演回退只用于手动补档；自动洗版不能把未启用队伍洗成特殊公演
                     if not target_team and group_code and include_disabled:
                         target_team = self._special_team_name(group_code)
@@ -884,14 +900,14 @@ class Snh48Scanner:
                 print(f"  ✓ 洗版检查 {bvid}: 文件已是 {actual}，无需洗版", flush=True)
                 continue
 
-            if not self._match_team(title):
-                # 该场次所属队伍未开启自动入库(如手动补档的特殊公演)，不做自动洗版
-                print(f"  ⏭️ 洗版跳过 {bvid}: 队伍未开启自动入库，保留手动入库结果", flush=True)
-                continue
-
             # 分团身份沿用历史记录：洗版不能把非 SNH 场次改写回 snh
             record = self.history_store.get(bvid) or {}
             group_code = record.get('group_code') or 'snh'
+
+            if not self._match_team(title, group_code=group_code):
+                # 该场次所属队伍未开启自动入库(如手动补档的特殊公演)，不做自动洗版
+                print(f"  ⏭️ 洗版跳过 {bvid}: 队伍未开启自动入库，保留手动入库结果", flush=True)
+                continue
 
             print(f"🔄 洗版启动: {bvid} [{codec} → {target_codec}] {title}", flush=True)
             command = DownloadCommand(
