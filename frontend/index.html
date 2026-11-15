@@ -1559,16 +1559,28 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                         pocketHls = new window.Hls({ liveDurationInfinity: true, lowLatencyMode: true });
                         pocketHls.loadSource(url);
                         pocketHls.attachMedia(video);
+                        let reloading = false;
                         pocketHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
                             pocketPlayerLoading.value = false;
                             video.play().catch(() => {});
                         });
                         pocketHls.on(window.Hls.Events.ERROR, (event, data) => {
                             if (!data.fatal) return;
+                            if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+                                if (reloading) return;
+                                reloading = true;
+                                pocketPlayerMessage.value = '直播流切换中，正在自动重连...';
+                                setTimeout(() => {
+                                    reloading = false;
+                                    if (!pocketHls) return;
+                                    pocketPlayerMessage.value = '';
+                                    pocketHls.loadSource(url);
+                                    pocketHls.startLoad();
+                                }, 2500);
+                                return;
+                            }
                             pocketPlayerLoading.value = false;
-                            pocketPlayerMessage.value = data.type === window.Hls.ErrorTypes.NETWORK_ERROR
-                                ? '直播流连接失败，可能已下播或转流启动超时'
-                                : '播放出错：' + (data.details || data.type);
+                            pocketPlayerMessage.value = '播放出错：' + (data.details || data.type);
                         });
                     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                         video.src = url;

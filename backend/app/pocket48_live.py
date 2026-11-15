@@ -27,6 +27,7 @@ HEADERS = {
 
 CACHE_TTL = 30
 IDLE_SECONDS = 90
+STALL_SECONDS = 12
 STREAM_ROOT = os.environ.get("POCKET_STREAM_PATH", "/config/live")
 
 _cache = {"data": None, "ts": 0.0}
@@ -145,7 +146,9 @@ def _log_tail(directory, limit=800):
 def _start_stream(live_id):
     info = _post(ONE_URL, {"liveId": live_id})
     content = info.get("content") or {}
-    stream = content.get("playStreamPath") or ""
+    # 连麦/多人画面时服务端会给 mergeStreamUrl，优先使用合并流
+    stream = (str(content.get("mergeStreamUrl") or "").strip()
+              or str(content.get("playStreamPath") or "").strip())
     if not stream:
         raise RuntimeError("直播间未开播或已结束")
 
@@ -173,6 +176,7 @@ def _start_stream(live_id):
         "proc": proc,
         "dir": directory,
         "last_access": time.time(),
+        "started_at": time.time(),
         "title": content.get("title") or "",
     }
 
@@ -189,12 +193,30 @@ def _wait_playlist(entry, timeout=15):
     raise RuntimeError("转流启动超时，请稍后重试")
 
 
+def _playlist_fresh(entry) -> bool:
+    path = os.path.join(entry["dir"], "index.m3u8")
+    try:
+        return time.time() - os.path.getmtime(path) < STALL_SECONDS
+    except OSError:
+        return False
+
+
 def ensure_stream(live_id):
     with _streams_lock:
         entry = _streams.get(live_id)
+        restart = True
         if entry and _alive(entry["proc"]):
-            entry["last_access"] = time.time()
-        else:
+            age = time.time() - entry.get("started_at", 0)
+            if age < STALL_SECONDS or _playlist_fresh(entry):
+                entry["last_access"] = time.time()
+                restart = False
+        if restart:
+            if entry and _alive(entry["proc"]):
+                entry["proc"].terminate()
+                try:
+                    entry["proc"].wait(5)
+                except Exception:
+                    entry["proc"].kill()
             entry = _start_stream(live_id)
             _streams[live_id] = entry
     return _wait_playlist(entry)
