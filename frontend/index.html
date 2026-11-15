@@ -1201,10 +1201,15 @@ const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vu
                             pocketMessage.value = data.message || '获取直播间失败';
                             return;
                         }
-                        pocketLives.value = data.items || [];
+                        const items = data.items || [];
+                        if (items.length === 0 && pocketLives.value.length > 0) {
+                            // 口袋48 偶发返回空列表，保留上一次结果，避免误判下播并关闭播放器
+                            return;
+                        }
+                        pocketLives.value = items;
                         pocketUpdatedAt.value = data.updated_at || 0;
-                        if (pocketPlayer.value
-                                && !pocketLives.value.some(l => l.live_id === pocketPlayer.value.live_id)) {
+                        if (pocketPlayer.value && items.length > 0
+                                && !items.some(l => l.live_id === pocketPlayer.value.live_id)) {
                             closePocketLive();
                         }
                     } catch (e) {
