@@ -14,6 +14,8 @@ import time
 import requests
 import yaml
 
+import pocket48_room
+
 LIST_URL = "https://pocketapi.48.cn/live/api/v1/live/getLiveList"
 ONE_URL = "https://pocketapi.48.cn/live/api/v1/live/getLiveOne"
 MEDIA_BASE = "https://source.48.cn"
@@ -36,8 +38,11 @@ _streams = {}
 _streams_lock = threading.Lock()
 
 
-def _post(url, payload, timeout=15):
-    resp = requests.post(url, json=payload, headers=HEADERS, timeout=timeout)
+def _post(url, payload, timeout=15, token: str = ""):
+    headers = dict(HEADERS)
+    if token:
+        headers["token"] = token
+    resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
     return resp.json()
 
@@ -144,7 +149,11 @@ def _log_tail(directory, limit=800):
 
 
 def _start_stream(live_id):
-    info = _post(ONE_URL, {"liveId": live_id})
+    try:
+        token = str(pocket48_room.load_config().get("token") or "").strip()
+    except Exception:
+        token = ""
+    info = _post(ONE_URL, {"liveId": live_id}, token=token)
     content = info.get("content") or {}
     # 连麦/多人画面时服务端会给 mergeStreamUrl，优先使用合并流
     stream = (str(content.get("mergeStreamUrl") or "").strip()
